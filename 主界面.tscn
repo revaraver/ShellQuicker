@@ -1,0 +1,321 @@
+[gd_scene format=3 uid="uid://dwbdihxxfj4vk"]
+
+[ext_resource type="Script" uid="uid://cyy0863bphabv" path="res://入口.gd" id="1_rv8a1"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_preview"]
+bg_color = Color(0.14902, 0.172549, 0.2, 1)
+corner_radius_top_left = 5
+corner_radius_top_right = 5
+corner_radius_bottom_right = 5
+corner_radius_bottom_left = 5
+
+[node name="主界面" type="Control" unique_id=548302223]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_rv8a1")
+
+[node name="底色" type="ColorRect" parent="." unique_id=1151164694]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.109804, 0.121569, 0.141176, 1)
+
+[node name="布局容器" type="VBoxContainer" parent="." unique_id=504563811]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="顶部导航" type="PanelContainer" parent="布局容器" unique_id=526859024]
+custom_minimum_size = Vector2(0, 70)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="布局容器/顶部导航" unique_id=2116703918]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_right = 20
+
+[node name="工具栏" type="HBoxContainer" parent="布局容器/顶部导航/MarginContainer" unique_id=2002739253]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="名称" type="Label" parent="布局容器/顶部导航/MarginContainer/工具栏" unique_id=1576701507]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "🚀 ShellQuicker"
+
+[node name="搜索框区域" type="HBoxContainer" parent="布局容器/顶部导航/MarginContainer/工具栏" unique_id=987478326]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 15
+
+[node name="搜索框" type="LineEdit" parent="布局容器/顶部导航/MarginContainer/工具栏/搜索框区域" unique_id=349008582]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+placeholder_text = "全局搜索 (Ctrl+F)..."
+
+[node name="搜文件夹备注" type="CheckBox" parent="布局容器/顶部导航/MarginContainer/工具栏/搜索框区域" unique_id=1468094610]
+layout_mode = 2
+focus_mode = 1
+text = "搜文件夹备注"
+
+[node name="搜模板备注" type="CheckBox" parent="布局容器/顶部导航/MarginContainer/工具栏/搜索框区域" unique_id=21239199]
+layout_mode = 2
+focus_mode = 1
+text = "搜模板备注"
+
+[node name="字体缩小按钮" type="Button" parent="布局容器/顶部导航/MarginContainer/工具栏/搜索框区域" unique_id=1397704957]
+layout_mode = 2
+focus_mode = 1
+text = " A- "
+
+[node name="字体增大按钮" type="Button" parent="布局容器/顶部导航/MarginContainer/工具栏/搜索框区域" unique_id=488236836]
+layout_mode = 2
+focus_mode = 1
+text = " A+ "
+
+[node name="主体区域" type="HSplitContainer" parent="布局容器" unique_id=1684389876]
+layout_mode = 2
+size_flags_vertical = 3
+split_offsets = PackedInt32Array(350)
+split_offset = 350
+
+[node name="左侧树容器" type="MarginContainer" parent="布局容器/主体区域" unique_id=92920289]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="左侧布局" type="VBoxContainer" parent="布局容器/主体区域/左侧树容器" unique_id=987478328]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="树状菜单" type="Tree" parent="布局容器/主体区域/左侧树容器/左侧布局" unique_id=207926177]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 18
+allow_rmb_select = true
+hide_root = true
+select_mode = 2
+
+[node name="树快捷操作" type="HBoxContainer" parent="布局容器/主体区域/左侧树容器/左侧布局" unique_id=1142249937]
+layout_mode = 2
+
+[node name="快捷新建模板" type="Button" parent="布局容器/主体区域/左侧树容器/左侧布局/树快捷操作" unique_id=1142249938]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 1
+text = " 📄 新模板 (Ctrl+A) "
+
+[node name="快捷新建文件夹" type="Button" parent="布局容器/主体区域/左侧树容器/左侧布局/树快捷操作" unique_id=1142249939]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 1
+text = " 📁 新文件夹 (Ctrl+N) "
+
+[node name="配置管理栏" type="HBoxContainer" parent="布局容器/主体区域/左侧树容器/左侧布局" unique_id=1661888037]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="配置选择" type="OptionButton" parent="布局容器/主体区域/左侧树容器/左侧布局/配置管理栏" unique_id=1142249932]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "切换当前使用的指令集文件"
+
+[node name="配置刷新按钮" type="Button" parent="布局容器/主体区域/左侧树容器/左侧布局/配置管理栏" unique_id=1142249936]
+layout_mode = 2
+tooltip_text = "刷新磁盘配置文件列表"
+focus_mode = 1
+text = " ↻ "
+
+[node name="配置重命名按钮" type="Button" parent="布局容器/主体区域/左侧树容器/左侧布局/配置管理栏" unique_id=1142249933]
+layout_mode = 2
+tooltip_text = "重命名当前指令集文件"
+focus_mode = 1
+text = " ✎ "
+
+[node name="配置新建按钮" type="Button" parent="布局容器/主体区域/左侧树容器/左侧布局/配置管理栏" unique_id=1142249934]
+layout_mode = 2
+tooltip_text = "新建空白指令集文件"
+focus_mode = 1
+text = " ＋ "
+
+[node name="配置删除按钮" type="Button" parent="布局容器/主体区域/左侧树容器/左侧布局/配置管理栏" unique_id=1142249935]
+layout_mode = 2
+tooltip_text = "删除当前选中的指令集文件"
+focus_mode = 1
+text = " － "
+
+[node name="右侧内容栈" type="MarginContainer" parent="布局容器/主体区域" unique_id=685651390]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 10
+
+[node name="预设详情面板" type="VBoxContainer" parent="布局容器/主体区域/右侧内容栈" unique_id=114266965]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="标题栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1927069292]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="预设名称输入" type="TextEdit" parent="布局容器/主体区域/右侧内容栈/预设详情面板/标题栏" unique_id=1825052117]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 22
+placeholder_text = "预设名称..."
+wrap_mode = 1
+scroll_fit_content_height = true
+
+[node name="预设说明输入" type="TextEdit" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1094105179]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+placeholder_text = "模板的备注说明..."
+wrap_mode = 1
+scroll_fit_content_height = true
+
+[node name="属性栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1661888036]
+layout_mode = 2
+
+[node name="命令标签" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/属性栏" unique_id=1142249926]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "命令："
+
+[node name="核心命令输入" type="TextEdit" parent="布局容器/主体区域/右侧内容栈/预设详情面板/属性栏" unique_id=1356206658]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "例如: dir"
+wrap_mode = 1
+scroll_fit_content_height = true
+
+[node name="智能解析按钮" type="Button" parent="布局容器/主体区域/右侧内容栈/预设详情面板/属性栏" unique_id=1142249927]
+layout_mode = 2
+tooltip_text = "输入完整命令后点击，自动拆分为核心命令和下方变量 (Shift+Enter)"
+focus_mode = 1
+text = " 🪄 智能拆分 (Shift+Enter) "
+
+[node name="参数滚屏" type="ScrollContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1950662625]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="参数容器" type="VBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板/参数滚屏" unique_id=1221408841]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="按钮栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=892305510]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="添加参数按钮" type="Button" parent="布局容器/主体区域/右侧内容栈/预设详情面板/按钮栏" unique_id=256948397]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 1
+text = " ＋ 添加命令行变量 (Ctrl+B) "
+
+[node name="预览面板" type="PanelContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1733536939]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_preview")
+
+[node name="M" type="MarginContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板" unique_id=1746041146]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="预览布局" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M" unique_id=987478327]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="预览标题" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局" unique_id=1142249929]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
+text = "预计执行："
+
+[node name="详情预览" type="RichTextLabel" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局" unique_id=1986183659]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 2
+mouse_default_cursor_shape = 1
+theme_override_colors/default_color = Color(0.8, 0.8, 0.8, 1)
+bbcode_enabled = true
+text = "预览执行指令..."
+fit_content = true
+selection_enabled = true
+
+[node name="复制指令按钮" type="Button" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局" unique_id=1142249930]
+layout_mode = 2
+size_flags_vertical = 0
+text = " 📋 复制 "
+
+[node name="底部动作" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1644132684]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Shell选择" type="OptionButton" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=51380369]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+
+[node name="UTF8模式" type="CheckBox" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=1142249928]
+layout_mode = 2
+tooltip_text = "在执行命令前添加 chcp 65001，解决 Windows 终端中文显示为乱码的问题"
+text = "UTF-8 模式"
+
+[node name="多开许可" type="CheckBox" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=1142249931]
+layout_mode = 2
+tooltip_text = "允许同时运行多个此应用窗口"
+text = "允许多开"
+
+[node name="执行预设按钮" type="Button" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=136166635]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 20
+text = "🚀 立即运行"
+
+[node name="文件夹详情面板" type="VBoxContainer" parent="布局容器/主体区域/右侧内容栈" unique_id=814806360]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="文件夹描述容器" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/文件夹详情面板" unique_id=864097901]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="文件夹图标" type="Label" parent="布局容器/主体区域/右侧内容栈/文件夹详情面板/文件夹描述容器" unique_id=407348069]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "📂"
+
+[node name="文件夹名称标题" type="TextEdit" parent="布局容器/主体区域/右侧内容栈/文件夹详情面板/文件夹描述容器" unique_id=1421618207]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 22
+placeholder_text = "文件夹名称"
+wrap_mode = 1
+scroll_fit_content_height = true
+
+[node name="文件夹描述输入" type="TextEdit" parent="布局容器/主体区域/右侧内容栈/文件夹详情面板" unique_id=1055107648]
+layout_mode = 2
+size_flags_vertical = 3
+placeholder_text = "记录该环境下工具的用途等..."
+wrap_mode = 1
+scroll_fit_content_height = true
+
+[node name="右键菜单" type="PopupMenu" parent="." unique_id=516272893]
