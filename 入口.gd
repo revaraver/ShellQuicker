@@ -137,9 +137,18 @@ func _ready():
 		p.mouse_filter = Control.MOUSE_FILTER_PASS
 		p.gui_input.connect(_on_panel_gui_input.bind(p))
 	
-	var 上次ID = 配置管理器.全局配置.get("上次选中ID", "")
-	if 上次ID != "" and 配置管理器.树状数据.has(上次ID):
-		_递归选中树项(树状菜单.get_root(), 上次ID)
+	# --- 延迟一帧执行，确保树已完全渲染 ---
+	get_tree().process_frame.connect(func():
+		var 上次ID = 配置管理器.全局配置.get("上次选中ID", "")
+		树状菜单.deselect_all()
+		if 树状菜单.get_root(): 树状菜单.get_root().set_collapsed(false)
+		
+		if 上次ID != "" and 配置管理器.树状数据.has(上次ID):
+			_递归选中树项(树状菜单.get_root(), 上次ID)
+		elif 树状菜单.get_root() and 树状菜单.get_root().get_first_child():
+			树状菜单.get_root().get_first_child().select(0)
+			_树项被选中()
+	, CONNECT_ONE_SHOT)
 
 	# --- 恢复搜索状态 ---
 	var 历史搜索 = 配置管理器.全局配置.get("搜索保留", "")
@@ -442,7 +451,7 @@ func _树项被选中():
 	if 选中.size() != 1: 当前选中ID = ""; 预设面板.hide(); 文件夹面板.hide(); return
 	var 项 = 选中[0]; var id = 项.get_metadata(0)
 	if id == 当前选中ID and (预设面板.visible or 文件夹面板.visible): return
-	当前选中ID = id; 配置管理器.全局配置["上次选中ID"] = 当前选中ID; 配置管理器.保存预设()
+	当前选中ID = id; 配置管理器.全局配置["上次选中ID"] = 当前选中ID; 配置管理器.保存全局配置()
 	_加载数据到界面(配置管理器.树状数据.get(当前选中ID))
 
 func _加载数据到界面(数据:Dictionary):
@@ -846,15 +855,20 @@ func _拉起窗口(类型:int, 完整命令:String, 开启UTF8: bool = false):
 	var 是PS = (类型 == 1 or 类型 == 3)
 	
 	# --- 添加命令回显提示 ---
+	var 基础路径 = ProjectSettings.globalize_path("res://").replace("/", "\\")
+	if 基础路径.ends_with("\\"): 基础路径 = 基础路径.left(-1)
+	
 	if 是PS:
 		# PS 使用 Write-Host 提供颜色高亮，单引号内两单引号表示转义
 		var 安全串 = 完整命令.replace("'", "''")
-		var 提示 = "Write-Host '[ShellQuicker | PowerShell] > ' -NoNewline -ForegroundColor DarkCyan ; Write-Host '" + 安全串 + "' -ForegroundColor Green ; "
+		var 提示 = "Write-Host '[ShellQuicker | PowerShell]' -ForegroundColor DarkCyan ; "
+		提示 += "Write-Host 'PS " + 基础路径 + "> ' -NoNewline ; "
+		提示 += "Write-Host '" + 安全串 + "' -ForegroundColor White ; "
 		命令 = 提示 + 完整命令
 	else:
-		# CMD 使用 echo，转义管道和逻辑符防截断 (包含提示语中的 | 和 > 也需要转义)
+		# CMD 使用 echo，转义管道和逻辑符防截断
 		var 安全串 = 完整命令.replace("&", "^&").replace("|", "^|").replace(">", "^>").replace("<", "^<")
-		var 提示 = "echo [ShellQuicker ^| CMD] ^> " + 安全串 + " && "
+		var 提示 = "echo [ShellQuicker ^| CMD] & echo " + 基础路径 + "^> " + 安全串 + " & "
 		命令 = 提示 + 完整命令
 	
 	if 开启UTF8:
@@ -866,8 +880,13 @@ func _拉起窗口(类型:int, 完整命令:String, 开启UTF8: bool = false):
 	match 类型:
 		0: OS.create_process("cmd", ["/c", "start", "cmd", "/k", 命令])
 		1: OS.create_process("cmd", ["/c", "start", "powershell", "-noexit", "-command", 命令])
-		2: OS.create_process("wt", ["-d", ".", "cmd", "/k", 命令])
-		3: OS.create_process("wt", ["-d", ".", "powershell", "-noexit", "-command", 命令])
+		2: 
+			# WT 需要对分号进行转义，否则会被误认为 WT 自身的分隔符
+			var wt_cmd = 命令.replace(";", "\\;")
+			OS.create_process("wt", ["-d", ".", "cmd", "/k", wt_cmd])
+		3: 
+			var wt_cmd = 命令.replace(";", "\\;")
+			OS.create_process("wt", ["-d", ".", "powershell", "-noexit", "-command", wt_cmd])
 
 func _树上运行图标被点击(项:TreeItem, _c, _i, _idx):
 	var node_id = 项.get_metadata(0); var 数据 = 配置管理器.树状数据.get(node_id)

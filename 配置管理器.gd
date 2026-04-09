@@ -23,7 +23,11 @@ var 当前数据路径: String = ""
 var _单实例服务器: TCPServer
 
 func _ready():
-	基础目录 = OS.get_executable_path().get_base_dir()
+	if OS.has_feature("editor"):
+		基础目录 = ProjectSettings.globalize_path("res://")
+	else:
+		基础目录 = OS.get_executable_path().get_base_dir()
+	
 	全局配置路径 = 基础目录.path_join("settings.cfg")
 	加载全局配置()
 	
@@ -93,7 +97,18 @@ func 保存预设():
 
 func 初始化默认数据():
 	树状数据 = {
-		"f_root": {"类型": "文件夹", "名称": "我的工具", "父节点": "", "描述": "", "order": 0}
+		"f_root": {"类型": "文件夹", "名称": "我的工具", "父节点": "", "描述": "存放我的常用命令", "order": 0},
+		"p_sample": {
+			"类型": "预设",
+			"名称": "查看当前目录 (示例)",
+			"父节点": "f_root",
+			"固定命令": "dir",
+			"描述": "这是一个示例命令，点击上方运行图标或按回车执行",
+			"order": 0,
+			"Shell类型": 0,
+			"UTF8模式": false,
+			"参数列表": []
+		}
 	}
 	保存预设()
 
