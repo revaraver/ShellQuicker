@@ -988,7 +988,7 @@ func _获取所有选中项() -> Array:
 func _递归选中树项(当前项:TreeItem, 目标ID: String) -> bool:
 	var 子 = 当前项.get_first_child()
 	while 子:
-		if 子.get_metadata(0) == 目标ID: 子.select(0); 树状菜单.scroll_to_item(子); _树项被选中(); return true
+		if 子.get_metadata(0) == 目标ID: 树状菜单.deselect_all(); 子.select(0); 树状菜单.scroll_to_item(子); _树项被选中(); return true
 		if _递归选中树项(子, 目标ID): return true
 		子 = 子.get_next()
 	return false
