@@ -186,6 +186,21 @@ placeholder_text = "模板的备注说明..."
 wrap_mode = 1
 scroll_fit_content_height = true
 
+[node name="前缀栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1661888038]
+layout_mode = 2
+
+[node name="前缀标签" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/前缀栏" unique_id=1142249937]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "命令前缀："
+
+[node name="前缀命令输入" type="TextEdit" parent="布局容器/主体区域/右侧内容栈/预设详情面板/前缀栏" unique_id=1356206659]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "将始终拼接到最前面，例如: git"
+wrap_mode = 1
+scroll_fit_content_height = true
+
 [node name="属性栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1661888036]
 layout_mode = 2
 
@@ -281,6 +296,11 @@ text = "UTF-8 模式"
 layout_mode = 2
 tooltip_text = "允许同时运行多个此应用窗口"
 text = "允许多开"
+
+[node name="执行时复制" type="CheckBox" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=1142249932]
+layout_mode = 2
+tooltip_text = "在点击运行按钮时，自动将最终指令复制到剪贴板"
+text = "执行时复制"
 
 [node name="执行预设按钮" type="Button" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=136166635]
 custom_minimum_size = Vector2(0, 50)

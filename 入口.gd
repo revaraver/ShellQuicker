@@ -24,6 +24,7 @@ var 搜夹连带子项勾选: CheckBox
 # 预设详情
 @onready var 预设名输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 标题栏 / 预设名称输入
 @onready var 预设说明输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预设说明输入
+@onready var 前缀命令输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 前缀栏 / 前缀命令输入
 @onready var 核心命令输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 属性栏 / 核心命令输入
 @onready var 参数容器 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 参数滚屏 / 参数容器
 @onready var 参数滚屏 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 参数滚屏
@@ -33,6 +34,7 @@ var 搜夹连带子项勾选: CheckBox
 @onready var Shell选择 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / Shell选择
 @onready var UTF8模式 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / UTF8模式
 @onready var 多开开关 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / 多开许可
+@onready var 执行时复制开关 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / 执行时复制
 @onready var 预览标签 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 详情预览
 @onready var 复制指令按钮 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 复制指令按钮
 @onready var 智能解析按钮 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 属性栏 / 智能解析按钮
@@ -72,6 +74,7 @@ func _ready():
 	搜文件夹备注勾选.button_pressed = 配置管理器.全局配置.get("搜文件夹备注", true)
 	搜模板备注勾选.button_pressed = 配置管理器.全局配置.get("搜模板备注", true)
 	多开开关.button_pressed = 配置管理器.全局配置.get("允许多开", false)
+	执行时复制开关.button_pressed = 配置管理器.全局配置.get("执行时复制", false)
 	
 	# --- 动态添加新复选框 ---
 	搜夹连带子项勾选 = CheckBox.new()
@@ -116,13 +119,17 @@ func _ready():
 	预设名输入.text_changed.connect(_自动保存当前预设)
 	预设名输入.focus_entered.connect(更新预览); 预设名输入.focus_exited.connect(更新预览)
 	预设说明输入.text_changed.connect(_自动保存当前预设)
+	前缀命令输入.text_changed.connect(_自动保存当前预设)
+	前缀命令输入.focus_entered.connect(更新预览); 前缀命令输入.focus_exited.connect(更新预览)
 	核心命令输入.text_changed.connect(_on_core_command_changed)
 	核心命令输入.focus_entered.connect(更新预览); 核心命令输入.focus_exited.connect(更新预览)
 	智能解析按钮.pressed.connect(func(): _智能解析并覆盖参数(核心命令输入.text))
 	Shell选择.item_selected.connect(_on_executor_setting_changed)
 	UTF8模式.toggled.connect(_on_executor_setting_changed)
 	多开开关.toggled.connect(_on_allow_multiple_toggled)
+	执行时复制开关.toggled.connect(_on_copy_on_execute_toggled)
 	复制指令按钮.pressed.connect(_on_copy_command_pressed)
+
 	
 	文件夹描述.text_changed.connect(_自动保存当前文件夹)
 	文件夹标题.text_changed.connect(_自动保存当前文件夹)
@@ -287,6 +294,13 @@ func _input(event):
 			_快捷范围合并()
 			get_viewport().set_input_as_handled(); return
 		
+		# --- Ctrl + C 复制快捷键 (非输入状态) ---
+		if event.ctrl_pressed and event.keycode == KEY_C:
+			var 是否在输入 = (焦点 is LineEdit or 焦点 is TextEdit)
+			if not 是否在输入:
+				_on_copy_command_pressed()
+				get_viewport().set_input_as_handled(); return
+		
 		if (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
 			if !(焦点 is TextEdit):
 				_点击执行(); get_viewport().set_input_as_handled(); return
@@ -426,15 +440,16 @@ func 创建参数行(键:String, 备注:String, 当前值:String):
 
 	# --- 智能插入位置逻辑 ---
 	var 插入索引 = -1
-	var 焦点 = get_viewport().gui_get_focus_owner()
-	if 焦点:
-		if 焦点 == 核心命令输入:
-			插入索引 = 0
-		else:
-			var 列表 = 参数容器.get_children()
-			for i in range(列表.size()):
-				if 列表[i].is_ancestor_of(焦点):
-					插入索引 = i + 1; break
+	if not _正在加载UI:
+		var 焦点 = get_viewport().gui_get_focus_owner()
+		if 焦点:
+			if 焦点 == 核心命令输入:
+				插入索引 = 0
+			else:
+				var 列表 = 参数容器.get_children()
+				for i in range(列表.size()):
+					if 列表[i].is_ancestor_of(焦点):
+						插入索引 = i + 1; break
 	
 	参数容器.add_child(行)
 	if 插入索引 != -1: 参数容器.move_child(行, 插入索引)
@@ -466,7 +481,7 @@ func _加载数据到界面(数据:Dictionary):
 	_正在加载UI = false
 
 func _加载预设详情(数据:Dictionary):
-	预设名输入.text = 数据["名称"]; 预设说明输入.text = 数据.get("描述", ""); 核心命令输入.text = 数据["固定命令"]; Shell选择.selected = 数据.get("Shell类型", 0)
+	预设名输入.text = 数据["名称"]; 预设说明输入.text = 数据.get("描述", ""); 前缀命令输入.text = 数据.get("前缀命令", ""); 核心命令输入.text = 数据["固定命令"]; Shell选择.selected = 数据.get("Shell类型", 0)
 	UTF8模式.button_pressed = 数据.get("UTF8模式", false)
 	for 子 in 参数容器.get_children(): 子.queue_free()
 	for 项 in 数据.get("参数列表", []): 创建参数行(项["键"], 项["备注"], 项.get("当前值", ""))
@@ -679,6 +694,7 @@ func _检查是否为子孙(祖先ID: String, 目标ID: String) -> bool:
 
 func 更新预览():
 	var 焦点 = get_viewport().gui_get_focus_owner()
+	var prefix_cmd = _清洗文本(前缀命令输入.text)
 	var base_cmd = _清洗文本(核心命令输入.text)
 	var final_bb = ""
 	
@@ -686,6 +702,12 @@ func 更新预览():
 	var 连接符 = " && " if (Shell选择.selected == 0 or Shell选择.selected == 2) else " ; "
 	if UTF8模式.button_pressed:
 		final_bb += "[color=#666666]chcp 65001 > nul" + 连接符 + "[/color]"
+	
+	# 前缀命令
+	if prefix_cmd != "":
+		var is_prefix_focused = (焦点 == 前缀命令输入)
+		if is_prefix_focused: final_bb += "[color=#00ff88]" + prefix_cmd + "[/color] "
+		else: final_bb += "[color=#aaaaaa]" + prefix_cmd + "[/color] "
 	
 	# 核心命令
 	var is_core_focused = (焦点 == 核心命令输入)
@@ -821,6 +843,10 @@ func _on_allow_multiple_toggled(pressed: bool):
 	配置管理器.全局配置["允许多开"] = pressed
 	配置管理器.保存全局配置()
 
+func _on_copy_on_execute_toggled(pressed: bool):
+	配置管理器.全局配置["执行时复制"] = pressed
+	配置管理器.保存全局配置()
+
 func _on_core_command_changed():
 	_自动保存当前预设(); 更新预览()
 
@@ -846,9 +872,27 @@ func _点击执行():
 	if 当前选中ID == "" or 预设面板.visible == false: return
 	_自动保存当前预设()
 	var 数据 = 配置管理器.树状数据[当前选中ID]
-	var 命令 = _清洗文本(数据["固定命令"])
-	for 行 in 参数容器.get_children(): 命令 += " " + 行.get_node("Value").text
-	_拉起窗口(Shell选择.selected, 命令, 数据.get("UTF8模式", false))
+	
+	var prefix = _清洗文本(数据.get("前缀命令", ""))
+	var core_cmd = _清洗文本(数据.get("固定命令", ""))
+	
+	# 核心拼装
+	var 完整命令 = core_cmd
+	if prefix != "":
+		完整命令 = prefix + " " + core_cmd
+	
+	# 拼装参数
+	for 行 in 参数容器.get_children():
+		if 行.is_queued_for_deletion(): continue
+		var value = 行.get_node("Value").text.strip_edges()
+		if value != "":
+			完整命令 += " " + value
+	
+	# 自动复制
+	if 执行时复制开关.button_pressed:
+		DisplayServer.clipboard_set(完整命令)
+	
+	_拉起窗口(Shell选择.selected, 完整命令, 数据.get("UTF8模式", false))
 
 func _拉起窗口(类型:int, 完整命令:String, 开启UTF8: bool = false):
 	var 命令 = 完整命令
@@ -892,8 +936,23 @@ func _树上运行图标被点击(项:TreeItem, _c, _i, _idx):
 	var node_id = 项.get_metadata(0); var 数据 = 配置管理器.树状数据.get(node_id)
 	if 数据 and 数据["类型"] == "预设":
 		if node_id == 当前选中ID:_自动保存当前预设()
-		var 命令 = 数据["固定命令"]; for p in 数据.get("参数列表", []): 命令 += " " + p.get("当前值", "")
-		_拉起窗口(数据.get("Shell类型", 0), 命令, 数据.get("UTF8模式", false))
+
+		var prefix = _清洗文本(数据.get("前缀命令", ""))
+		var core_cmd = 数据.get("固定命令", "")
+
+		var 完整命令 = core_cmd
+		if prefix != "":
+			完整命令 = prefix + " " + core_cmd
+
+		for p in 数据.get("参数列表", []):
+			var val = p.get("当前值", "").strip_edges()
+			if val != "":
+				完整命令 += " " + val
+
+		if 执行时复制开关.button_pressed:
+			DisplayServer.clipboard_set(完整命令)
+
+		_拉起窗口(数据.get("Shell类型", 0), 完整命令, 数据.get("UTF8模式", false))
 
 func _触发重命名(项:TreeItem):
 	if !项: return

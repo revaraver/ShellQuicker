@@ -13,7 +13,8 @@ var 全局配置: Dictionary = {
 	"搜索保留": "",
 	"当前配置文件": "presets",
 	"split_offset": 350,
-	"允许多开": false
+	"允许多开": false,
+	"执行时复制": false
 }
 
 var 配置文件别名: String = "presets"
