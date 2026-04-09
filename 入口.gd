@@ -416,10 +416,11 @@ func 创建参数行(键:String, 备注:String, 当前值:String):
 	值输入.text_changed.connect(func(): _自动保存当前预设(); 更新预览())
 	值输入.focus_entered.connect(更新预览); 值输入.focus_exited.connect(更新预览)
 	
-	var 备注输入 = TextEdit.new(); 备注输入.text = 备注; 备注输入.name = "Note"; 备注输入.placeholder_text = "参数说明..."; 备注输入.custom_minimum_size = Vector2(200, 40)
-	备注输入.size_flags_vertical = Control.SIZE_SHRINK_CENTER; 备注输入.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY; 备注输入.scroll_fit_content_height = true
+	var 备注输入 = TextEdit.new(); 备注输入.text = 备注; 备注输入.name = "Note"; 备注输入.placeholder_text = "参数说明..."; 备注输入.custom_minimum_size = Vector2(200, 0)
+	备注输入.size_flags_horizontal = Control.SIZE_EXPAND_FILL; 备注输入.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY; 备注输入.scroll_fit_content_height = true
 	备注输入.context_menu_enabled = false # 关闭系统菜单
 	备注输入.text_changed.connect(func(): _自动保存当前预设())
+	备注输入.focus_entered.connect(更新预览); 备注输入.focus_exited.connect(更新预览)
 	
 	var 删除按钮 = Button.new(); 删除按钮.text = " ✖ "; 删除按钮.add_theme_color_override("font_color", Color.INDIAN_RED); 删除按钮.focus_mode = Control.FOCUS_CLICK
 	删除按钮.pressed.connect(func():
@@ -601,7 +602,7 @@ func _搜索递归增强(项:TreeItem, 文本:String, 祖先强行显示: bool =
 func _自动保存当前预设():
 	if _正在加载UI or 当前选中ID == "": return
 	var 数据 = 配置管理器.树状数据.get(当前选中ID); if !数据 or 数据["类型"] != "预设": return
-	数据["名称"] = 预设名输入.text; 数据["描述"] = 预设说明输入.text; 数据["固定命令"] = 核心命令输入.text; 数据["Shell类型"] = Shell选择.selected
+	数据["名称"] = 预设名输入.text; 数据["描述"] = 预设说明输入.text; 数据["前缀命令"] = 前缀命令输入.text; 数据["固定命令"] = 核心命令输入.text; 数据["Shell类型"] = Shell选择.selected
 	数据["UTF8模式"] = UTF8模式.button_pressed
 	数据["参数列表"] = []
 	for 行 in 参数容器.get_children():
@@ -706,8 +707,8 @@ func 更新预览():
 	# 前缀命令
 	if prefix_cmd != "":
 		var is_prefix_focused = (焦点 == 前缀命令输入)
-		if is_prefix_focused: final_bb += "[color=#00ff88]" + prefix_cmd + "[/color] "
-		else: final_bb += "[color=#aaaaaa]" + prefix_cmd + "[/color] "
+		if is_prefix_focused: final_bb += "[color=#00ff88]" + prefix_cmd + "[/color]"
+		else: final_bb += "[color=#aaaaaa]" + prefix_cmd + "[/color]"
 	
 	# 核心命令
 	var is_core_focused = (焦点 == 核心命令输入)
@@ -879,7 +880,7 @@ func _点击执行():
 	# 核心拼装
 	var 完整命令 = core_cmd
 	if prefix != "":
-		完整命令 = prefix + " " + core_cmd
+		完整命令 = prefix + core_cmd
 	
 	# 拼装参数
 	for 行 in 参数容器.get_children():
@@ -942,7 +943,7 @@ func _树上运行图标被点击(项:TreeItem, _c, _i, _idx):
 
 		var 完整命令 = core_cmd
 		if prefix != "":
-			完整命令 = prefix + " " + core_cmd
+			完整命令 = prefix + core_cmd
 
 		for p in 数据.get("参数列表", []):
 			var val = p.get("当前值", "").strip_edges()

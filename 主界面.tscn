@@ -189,7 +189,7 @@ scroll_fit_content_height = true
 [node name="前缀栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1661888038]
 layout_mode = 2
 
-[node name="前缀标签" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/前缀栏" unique_id=1142249937]
+[node name="前缀标签" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/前缀栏" unique_id=504086653]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 text = "命令前缀："
@@ -230,6 +230,7 @@ horizontal_scroll_mode = 0
 [node name="参数容器" type="VBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板/参数滚屏" unique_id=1221408841]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 0
 theme_override_constants/separation = 10
 
 [node name="按钮栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=892305510]
@@ -297,7 +298,7 @@ layout_mode = 2
 tooltip_text = "允许同时运行多个此应用窗口"
 text = "允许多开"
 
-[node name="执行时复制" type="CheckBox" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=1142249932]
+[node name="执行时复制" type="CheckBox" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=339734374]
 layout_mode = 2
 tooltip_text = "在点击运行按钮时，自动将最终指令复制到剪贴板"
 text = "执行时复制"
