@@ -319,3 +319,4 @@ wrap_mode = 1
 scroll_fit_content_height = true
 
 [node name="右键菜单" type="PopupMenu" parent="." unique_id=516272893]
+oversampling_override = 1.0

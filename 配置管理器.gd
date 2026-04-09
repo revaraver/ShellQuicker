@@ -9,6 +9,8 @@ var 全局配置: Dictionary = {
 	"字体大小": 18,
 	"搜文件夹备注": true,
 	"搜模板备注": true,
+	"搜夹连带子项": true,
+	"搜索保留": "",
 	"当前配置文件": "presets",
 	"split_offset": 350,
 	"允许多开": false

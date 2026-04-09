@@ -8,6 +8,7 @@ extends Node
 @onready var 搜索框: LineEdit = $布局容器 / 顶部导航 / MarginContainer / 工具栏 / 搜索框区域 / 搜索框
 @onready var 搜文件夹备注勾选: CheckBox = $布局容器 / 顶部导航 / MarginContainer / 工具栏 / 搜索框区域 / 搜文件夹备注
 @onready var 搜模板备注勾选: CheckBox = $布局容器 / 顶部导航 / MarginContainer / 工具栏 / 搜索框区域 / 搜模板备注
+var 搜夹连带子项勾选: CheckBox
 
 @onready var 字体缩小按钮: Button = $布局容器 / 顶部导航 / MarginContainer / 工具栏 / 搜索框区域 / 字体缩小按钮
 @onready var 字体增大按钮: Button = $布局容器 / 顶部导航 / MarginContainer / 工具栏 / 搜索框区域 / 字体增大按钮
@@ -72,6 +73,14 @@ func _ready():
 	搜模板备注勾选.button_pressed = 配置管理器.全局配置.get("搜模板备注", true)
 	多开开关.button_pressed = 配置管理器.全局配置.get("允许多开", false)
 	
+	# --- 动态添加新复选框 ---
+	搜夹连带子项勾选 = CheckBox.new()
+	搜夹连带子项勾选.text = "显示文件夹穿透"
+	搜夹连带子项勾选.button_pressed = 配置管理器.全局配置.get("搜夹连带子项", true)
+	var tree_parent = 树状菜单.get_parent()
+	tree_parent.add_child(搜夹连带子项勾选)
+	tree_parent.move_child(搜夹连带子项勾选, 树状菜单.get_index() + 2)
+	
 	_初始化UI()
 	
 	# 信号连接
@@ -87,6 +96,7 @@ func _ready():
 	
 	搜文件夹备注勾选.toggled.connect(_on_search_config_toggled.bind("搜文件夹备注"))
 	搜模板备注勾选.toggled.connect(_on_search_config_toggled.bind("搜模板备注"))
+	搜夹连带子项勾选.toggled.connect(_on_search_config_toggled.bind("搜夹连带子项"))
 	
 	字体增大按钮.pressed.connect(_调整字体大小.bind(2))
 	字体缩小按钮.pressed.connect(_调整字体大小.bind(-2))
@@ -115,7 +125,7 @@ func _ready():
 	复制指令按钮.pressed.connect(_on_copy_command_pressed)
 	
 	文件夹描述.text_changed.connect(_自动保存当前文件夹)
-	文件夹标题.text_changed.connect(func(_t): _自动保存当前文件夹())
+	文件夹标题.text_changed.connect(_自动保存当前文件夹)
 	
 	var 主体区域 = $布局容器 / 主体区域
 	主体区域.split_offset = 配置管理器.全局配置.get("split_offset", 350)
@@ -130,6 +140,14 @@ func _ready():
 	var 上次ID = 配置管理器.全局配置.get("上次选中ID", "")
 	if 上次ID != "" and 配置管理器.树状数据.has(上次ID):
 		_递归选中树项(树状菜单.get_root(), 上次ID)
+
+	# --- 恢复搜索状态 ---
+	var 历史搜索 = 配置管理器.全局配置.get("搜索保留", "")
+	搜夹连带子项勾选.disabled = (历史搜索.strip_edges() == "")
+	搜夹连带子项勾选.visible = !(历史搜索.strip_edges() == "")
+	if 历史搜索 != "":
+		搜索框.text = 历史搜索
+		_搜索框内容改变(历史搜索)
 
 func _加载内置图标():
 	var svg = "<svg viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M8 5V19L19 12L8 5Z' fill='#00ff88'/></svg>"
@@ -508,6 +526,12 @@ func _智能解析并覆盖参数(文本:String):
 
 func 刷新树状菜单():
 	树状菜单.clear(); var 根 = 树状菜单.create_item(); 填充树递归("", 根)
+	_动态更新当前搜索()
+	if 当前选中ID != "": _递归选中树项(树状菜单.get_root(), 当前选中ID)
+
+func _动态更新当前搜索():
+	if is_instance_valid(搜索框) and 搜索框.text != "":
+		var 根 = 树状菜单.get_root(); if 根:_搜索递归增强(根, 搜索框.text.to_lower(), false)
 
 func 填充树递归(pid: String, parent_item: TreeItem):
 	var nodes = 配置管理器.获取子节点(pid)
@@ -518,10 +542,17 @@ func 填充树递归(pid: String, parent_item: TreeItem):
 		填充树递归(n["ID"], item)
 
 func _搜索框内容改变(新文本:String):
+	配置管理器.全局配置["搜索保留"] = 新文本
+	配置管理器.保存全局配置()
+	
+	if is_instance_valid(搜夹连带子项勾选):
+		搜夹连带子项勾选.disabled = (新文本.strip_edges() == "")
+		搜夹连带子项勾选.visible = !(新文本.strip_edges() == "")
+		
 	if 新文本 == "": 刷新树状菜单(); return
-	var 根 = 树状菜单.get_root(); if 根:_搜索递归增强(根, 新文本.to_lower())
+	var 根 = 树状菜单.get_root(); if 根:_搜索递归增强(根, 新文本.to_lower(), false)
 
-func _搜索递归增强(项:TreeItem, 文本:String) -> bool:
+func _搜索递归增强(项:TreeItem, 文本:String, 祖先强行显示: bool = false) -> bool:
 	var id = 项.get_metadata(0); var 数据 = 配置管理器.树状数据.get(id)
 	var 匹配名称 = 文本 in 项.get_text(0).to_lower(); var 匹配备注 = false
 	if 数据:
@@ -531,9 +562,15 @@ func _搜索递归增强(项:TreeItem, 文本:String) -> bool:
 		elif 数据["类型"] == "预设" and 搜模板备注勾选.button_pressed:
 			var 备注 = 数据.get("描述", "").to_lower()
 			if 文本 in 备注: 匹配备注 = true
-	var 自己匹配 = 匹配名称 or 匹配备注; var 子项匹配 = false; var 子 = 项.get_first_child()
+	var 自己匹配 = 匹配名称 or 匹配备注 or 祖先强行显示
+	
+	var 作为连带触发点 = false
+	if 数据 and 数据["类型"] == "文件夹" and 搜夹连带子项勾选.button_pressed and (匹配名称 or 匹配备注):
+		作为连带触发点 = true
+		
+	var 子项匹配 = false; var 子 = 项.get_first_child()
 	while 子:
-		if _搜索递归增强(子, 文本): 子项匹配 = true
+		if _搜索递归增强(子, 文本, 祖先强行显示 or 作为连带触发点): 子项匹配 = true
 		子 = 子.get_next()
 	项.visible = 自己匹配 or 子项匹配; return 项.visible
 
@@ -548,6 +585,7 @@ func _自动保存当前预设():
 		数据["参数列表"].append({"键": 行.get_node("Key").text, "备注": 行.get_node("Note").text, "当前值": 行.get_node("Value").text})
 	配置管理器.保存预设(); var 项 = 树状菜单.get_selected()
 	if 项 and 项.get_metadata(0) == 当前选中ID: 项.set_text(0, 数据["名称"])
+	_动态更新当前搜索()
 
 func _自动保存当前文件夹():
 	if _正在加载UI or 当前选中ID == "": return
@@ -555,6 +593,7 @@ func _自动保存当前文件夹():
 	数据["名称"] = 文件夹标题.text; 数据["描述"] = 文件夹描述.text; 配置管理器.保存预设()
 	var 项 = 树状菜单.get_selected()
 	if 项 and 项.get_metadata(0) == 当前选中ID: 项.set_text(0, 数据["名称"])
+	_动态更新当前搜索()
 
 func _get_drag_data_logic(_pos):
 	var selected = _获取所有选中项(); if selected.is_empty(): return null
@@ -806,11 +845,23 @@ func _拉起窗口(类型:int, 完整命令:String, 开启UTF8: bool = false):
 	var 命令 = 完整命令
 	var 是PS = (类型 == 1 or 类型 == 3)
 	
+	# --- 添加命令回显提示 ---
+	if 是PS:
+		# PS 使用 Write-Host 提供颜色高亮，单引号内两单引号表示转义
+		var 安全串 = 完整命令.replace("'", "''")
+		var 提示 = "Write-Host '[ShellQuicker | PowerShell] > ' -NoNewline -ForegroundColor DarkCyan ; Write-Host '" + 安全串 + "' -ForegroundColor Green ; "
+		命令 = 提示 + 完整命令
+	else:
+		# CMD 使用 echo，转义管道和逻辑符防截断 (包含提示语中的 | 和 > 也需要转义)
+		var 安全串 = 完整命令.replace("&", "^&").replace("|", "^|").replace(">", "^>").replace("<", "^<")
+		var 提示 = "echo [ShellQuicker ^| CMD] ^> " + 安全串 + " && "
+		命令 = 提示 + 完整命令
+	
 	if 开启UTF8:
 		if 是PS:
-			命令 = "chcp 65001 > $null ; " + 完整命令
+			命令 = "chcp 65001 > $null ; " + 命令
 		else:
-			命令 = "chcp 65001 > nul && " + 完整命令
+			命令 = "chcp 65001 > nul && " + 命令
 	
 	match 类型:
 		0: OS.create_process("cmd", ["/c", "start", "cmd", "/k", 命令])
@@ -839,6 +890,7 @@ func _树项编辑完成():
 			if 预设面板.visible: 预设名输入.text = 新名
 			elif 文件夹面板.visible: 文件夹标题.text = 新名
 		项.set_editable(0, false)
+		_动态更新当前搜索()
 
 func _点击删除动作():
 	var 选中 = _获取所有选中项(); if 选中.is_empty(): return
