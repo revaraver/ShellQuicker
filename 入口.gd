@@ -45,6 +45,7 @@ var 搜夹连带子项勾选: CheckBox
 @onready var 文件夹描述 = $布局容器 / 主体区域 / 右侧内容栈 / 文件夹详情面板 / 文件夹描述输入
 
 var 当前选中ID: String = ""
+var _已折叠ID集合: Dictionary = {}
 var 正在重命名状态: bool = false
 var _正在加载UI: bool = false
 var 播放图标: Texture2D
@@ -70,25 +71,14 @@ func _ready():
 	树状菜单.入口 = self
 	
 	# --- 加载全局持久化配置 ---
-	当前字体大小 = 配置管理器.全局配置.get("字体大小", 18)
-	搜文件夹备注勾选.button_pressed = 配置管理器.全局配置.get("搜文件夹备注", true)
-	搜模板备注勾选.button_pressed = 配置管理器.全局配置.get("搜模板备注", true)
-	多开开关.button_pressed = 配置管理器.全局配置.get("允许多开", false)
-	执行时复制开关.button_pressed = 配置管理器.全局配置.get("执行时复制", false)
-	
-	# --- 动态添加新复选框 ---
-	搜夹连带子项勾选 = CheckBox.new()
-	搜夹连带子项勾选.text = "显示文件夹穿透"
-	搜夹连带子项勾选.button_pressed = 配置管理器.全局配置.get("搜夹连带子项", true)
-	var tree_parent = 树状菜单.get_parent()
-	tree_parent.add_child(搜夹连带子项勾选)
-	tree_parent.move_child(搜夹连带子项勾选, 树状菜单.get_index() + 2)
+	_同步状态到UI()
 	
 	_初始化UI()
 	
 	# 信号连接
 	树状菜单.item_selected.connect(_树项被选中)
 	树状菜单.item_mouse_selected.connect(_on_tree_mouse_selected)
+	树状菜单.item_collapsed.connect(_树项折叠状态改变)
 	树状菜单.item_edited.connect(_树项编辑完成)
 	树状菜单.item_activated.connect(_执行双击改名)
 	树状菜单.button_clicked.connect(_树上运行图标被点击)
@@ -99,7 +89,8 @@ func _ready():
 	
 	搜文件夹备注勾选.toggled.connect(_on_search_config_toggled.bind("搜文件夹备注"))
 	搜模板备注勾选.toggled.connect(_on_search_config_toggled.bind("搜模板备注"))
-	搜夹连带子项勾选.toggled.connect(_on_search_config_toggled.bind("搜夹连带子项"))
+	if 搜夹连带子项勾选:
+		搜夹连带子项勾选.toggled.connect(_on_search_config_toggled.bind("搜夹连带子项"))
 	
 	字体增大按钮.pressed.connect(_调整字体大小.bind(2))
 	字体缩小按钮.pressed.connect(_调整字体大小.bind(-2))
@@ -138,32 +129,39 @@ func _ready():
 	主体区域.split_offset = 配置管理器.全局配置.get("split_offset", 350)
 	主体区域.dragged.connect(_on_layout_dragged)
 	
-	_刷新配置列表UI(); 刷新树状菜单()
+	_刷新配置列表UI()
+	_完整状态恢复流程()
 	
 	for p in [预设面板, 文件夹面板]:
 		p.mouse_filter = Control.MOUSE_FILTER_PASS
 		p.gui_input.connect(_on_panel_gui_input.bind(p))
+
+func _完整状态恢复流程():
+	# 1. 物理同步 UI 组件值
+	_同步状态到UI()
 	
-	# --- 延迟一帧执行，确保树已完全渲染 ---
+	# 2. 重建树（会基于 _已折叠ID集合 恢复折叠）
+	刷新树状菜单()
+	
+	# 3. 延迟一帧执行高阶定位逻辑（确保树渲染完毕）
 	get_tree().process_frame.connect(func():
 		var 上次ID = 配置管理器.全局配置.get("上次选中ID", "")
 		树状菜单.deselect_all()
-		if 树状菜单.get_root(): 树状菜单.get_root().set_collapsed(false)
 		
 		if 上次ID != "" and 配置管理器.树状数据.has(上次ID):
 			_递归选中树项(树状菜单.get_root(), 上次ID)
 		elif 树状菜单.get_root() and 树状菜单.get_root().get_first_child():
 			树状菜单.get_root().get_first_child().select(0)
 			_树项被选中()
+			
+		# 4. 恢复搜索视觉状态（如果在 _同步状态到UI 中已设置 text，这里触发逻辑）
+		var 历史搜索 = 配置管理器.全局配置.get("搜索保留", "")
+		if 历史搜索 != "":
+			_搜索框内容改变(历史搜索)
+		elif 搜夹连带子项勾选:
+			搜夹连带子项勾选.disabled = true
+			搜夹连带子项勾选.visible = false
 	, CONNECT_ONE_SHOT)
-
-	# --- 恢复搜索状态 ---
-	var 历史搜索 = 配置管理器.全局配置.get("搜索保留", "")
-	搜夹连带子项勾选.disabled = (历史搜索.strip_edges() == "")
-	搜夹连带子项勾选.visible = !(历史搜索.strip_edges() == "")
-	if 历史搜索 != "":
-		搜索框.text = 历史搜索
-		_搜索框内容改变(历史搜索)
 
 func _加载内置图标():
 	var svg = "<svg viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M8 5V19L19 12L8 5Z' fill='#00ff88'/></svg>"
@@ -549,10 +547,58 @@ func _智能解析并覆盖参数(文本:String):
 	_自动保存当前预设()
 	更新预览()
 
-func 刷新树状菜单():
-	树状菜单.clear(); var 根 = 树状菜单.create_item(); 填充树递归("", 根)
+func _同步状态到UI():
+	# 从配置管理器加载新 Profile 的数据到 UI
+	_加载折叠到内存()
+	当前字体大小 = 配置管理器.全局配置.get("字体大小", 18)
+	搜文件夹备注勾选.button_pressed = 配置管理器.全局配置.get("搜文件夹备注", true)
+	搜模板备注勾选.button_pressed = 配置管理器.全局配置.get("搜模板备注", true)
+	执行时复制开关.button_pressed = 配置管理器.全局配置.get("执行时复制", false)
+	搜索框.text = 配置管理器.全局配置.get("搜索保留", "")
+	if 搜夹连带子项勾选:
+		搜夹连带子项勾选.button_pressed = 配置管理器.全局配置.get("搜夹连带子项", true)
+
+func _加载折叠到内存():
+	var 存档折叠 = 配置管理器.全局配置.get("已折叠ID", [])
+	_已折叠ID集合.clear()
+	for id in 存档折叠: _已折叠ID集合[id] = true
+
+func _保存折叠到全局():
+	配置管理器.全局配置["已折叠ID"] = _已折叠ID集合.keys()
+	配置管理器.保存全局配置()
+
+func 刷新树状菜单(记录折叠: bool = true):
+	# 仅在需要且未搜索时记录折叠状态
+	if 记录折叠 and is_instance_valid(搜索框) and 搜索框.text == "":
+		var 根 = 树状菜单.get_root()
+		# 关键修复：只有当树中存在子节点（非空）时才允许覆盖内存记录
+		# 这样启动时刷新操作就不会抹掉刚才从配置里读出来的历史数据
+		if 根 and 根.get_first_child():
+			_已折叠ID集合.clear()
+			_递归记录折叠状态(根)
+			_保存折叠到全局()
+	
+	树状菜单.clear()
+	var 根2 = 树状菜单.create_item()
+	填充树递归("", 根2)
 	_动态更新当前搜索()
 	if 当前选中ID != "": _递归选中树项(树状菜单.get_root(), 当前选中ID)
+
+func _树项折叠状态改变(项:TreeItem):
+	if _正在加载UI: return
+	# 搜索期间的操作不记录到持久化
+	if is_instance_valid(搜索框) and 搜索框.text != "": return
+	
+	var id = 项.get_metadata(0); if !id: return
+	if 项.collapsed: _已折叠ID集合[id] = true
+	else: _已折叠ID集合.erase(id)
+	_保存折叠到全局()
+
+func _递归记录折叠状态(项:TreeItem):
+	var id = 项.get_metadata(0)
+	if 项.collapsed and id: _已折叠ID集合[id] = true
+	var 子 = 项.get_first_child()
+	while 子: _递归记录折叠状态(子); 子 = 子.get_next()
 
 func _动态更新当前搜索():
 	if is_instance_valid(搜索框) and 搜索框.text != "":
@@ -562,11 +608,14 @@ func 填充树递归(pid: String, parent_item: TreeItem):
 	var nodes = 配置管理器.获取子节点(pid)
 	for n in nodes:
 		var item = 树状菜单.create_item(parent_item); item.set_text(0, n["名称"]); item.set_metadata(0, n["ID"])
-		if n["类型"] == "文件夹": item.set_custom_color(0, Color.GOLDENROD)
+		if n["类型"] == "文件夹": 
+			item.set_custom_color(0, Color.GOLDENROD)
+			if _已折叠ID集合.has(n["ID"]): item.collapsed = true
 		else: item.add_button(0, 播放图标, 0, false, "立即执行")
 		填充树递归(n["ID"], item)
 
 func _搜索框内容改变(新文本:String):
+	var 旧文本 = 配置管理器.全局配置.get("搜索保留", "")
 	配置管理器.全局配置["搜索保留"] = 新文本
 	配置管理器.保存全局配置()
 	
@@ -574,7 +623,15 @@ func _搜索框内容改变(新文本:String):
 		搜夹连带子项勾选.disabled = (新文本.strip_edges() == "")
 		搜夹连带子项勾选.visible = !(新文本.strip_edges() == "")
 		
-	if 新文本 == "": 刷新树状菜单(); return
+	# 如果是从无到有的搜索，先记录下当前的折叠状态，以便清空后恢复
+	if 旧文本 == "" and 新文本 != "":
+		var 根 = 树状菜单.get_root()
+		if 根: 
+			_已折叠ID集合.clear()
+			_递归记录折叠状态(根)
+			_保存折叠到全局()
+
+	if 新文本 == "": 刷新树状菜单(false); return
 	var 根 = 树状菜单.get_root(); if 根:_搜索递归增强(根, 新文本.to_lower(), false)
 
 func _搜索递归增强(项:TreeItem, 文本:String, 祖先强行显示: bool = false) -> bool:
@@ -1088,9 +1145,15 @@ func _刷新配置列表UI():
 		if list[i] == current: 配置选择.selected = i
 
 func _切换配置文件(index: int):
+	# 切换前强制同步当前状态到旧 Profile 的存档
+	if 树状菜单.get_root():
+		_已折叠ID集合.clear()
+		_递归记录折叠状态(树状菜单.get_root())
+		_保存折叠到全局()
+	
 	var profile_name = 配置选择.get_item_text(index)
 	配置管理器.切换配置文件(profile_name)
-	刷新树状菜单()
+	_完整状态恢复流程() 
 	预设面板.hide(); 文件夹面板.hide()
 
 func _请求新建配置():
@@ -1100,7 +1163,8 @@ func _请求新建配置():
 	dialog.confirmed.connect(func():
 		var n = input.text.strip_edges()
 		if n != "" and 配置管理器.新建配置文件(n):
-			_刷新配置列表UI(); 刷新树状菜单(); 预设面板.hide(); 文件夹面板.hide()
+			_完整状态恢复流程() 
+			_刷新配置列表UI(); 预设面板.hide(); 文件夹面板.hide()
 		dialog.queue_free()
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
@@ -1124,7 +1188,8 @@ func _请求删除配置():
 	add_child(dialog)
 	dialog.confirmed.connect(func():
 		配置管理器.删除当前配置()
-		_刷新配置列表UI(); 刷新树状菜单(); 预设面板.hide(); 文件夹面板.hide()
+		_完整状态恢复流程() 
+		_刷新配置列表UI(); 预设面板.hide(); 文件夹面板.hide()
 		dialog.queue_free()
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())

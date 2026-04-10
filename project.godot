@@ -19,6 +19,7 @@ run/main_scene="res://主界面.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 run/max_fps=60
 run/low_processor_mode=true
+boot_splash/show_image=false
 config/icon="res://icon.png"
 config/windows_native_icon="res://icon.ico"
 run/single_instance=true

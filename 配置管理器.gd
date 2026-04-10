@@ -14,7 +14,8 @@ var 全局配置: Dictionary = {
 	"当前配置文件": "presets",
 	"split_offset": 350,
 	"允许多开": false,
-	"执行时复制": false
+	"执行时复制": false,
+	"已折叠ID": []
 }
 
 var 配置文件别名: String = "presets"
@@ -51,18 +52,43 @@ func _单实例锁定初始化():
 
 # --- 全局设置管理 (ConfigFile) ---
 
-func 加载全局配置():
+func 加载全局配置(指定别名: String = ""):
 	var config = ConfigFile.new()
 	if config.load(全局配置路径) == OK:
-		for key in 全局配置:
-			全局配置[key] = config.get_value("Settings", key, 全局配置[key])
+		# 1. 加载全局通用设置
+		for key in ["当前配置文件", "字体大小", "允许多开", "split_offset"]:
+			if 全局配置.has(key):
+				全局配置[key] = config.get_value("Settings", key, 全局配置[key])
+		
+		# 如果手动指定了别名（用于切换时），则以指定的为准
+		var 目标别名 = 指定别名 if 指定别名 != "" else 全局配置["当前配置文件"]
+		
+		# 2. 根据目标别名加载专属 Profile 设置
+		var section = "Profile_" + 目标别名
+		for key in ["上次选中ID", "搜文件夹备注", "搜模板备注", "搜夹连带子项", "搜索保留", "执行时复制"]:
+			if 全局配置.has(key):
+				全局配置[key] = config.get_value(section, key, 全局配置[key])
+		
+		# 加载折叠状态
+		全局配置["已折叠ID"] = config.get_value(section, "已折叠ID", [])
 	else:
 		保存全局配置()
 
 func 保存全局配置():
 	var config = ConfigFile.new()
-	for key in 全局配置:
+	config.load(全局配置路径) # 必须先 load 以保留其他 Profile 的数据
+	
+	# 1. 写入全局通用 (确保当前配置文件名被写入)
+	for key in ["当前配置文件", "字体大小", "允许多开", "split_offset"]:
 		config.set_value("Settings", key, 全局配置[key])
+	
+	# 2. 写入当前 Profile 专属
+	var section = "Profile_" + 配置文件别名
+	for key in ["上次选中ID", "搜文件夹备注", "搜模板备注", "搜夹连带子项", "搜索保留", "执行时复制"]:
+		config.set_value(section, key, 全局配置[key])
+	
+	config.set_value(section, "已折叠ID", 全局配置.get("已折叠ID", []))
+	
 	config.save(全局配置路径)
 
 # --- 数据预设管理 (JSON) ---
@@ -129,10 +155,27 @@ func 获取配置文件列表() -> Array:
 
 func 切换配置文件(别名: String):
 	if 别名 == 配置文件别名: return
+	
+	# 1. 切换前，保存当前旧 Profile 的完整状态到它自己的 Section
+	保存全局配置()
+	
+	# 2. 正式切换指向
+	var 旧别名 = 配置文件别名
 	配置文件别名 = 别名
 	当前数据路径 = 基础目录.path_join(别名 + ".json")
 	全局配置["当前配置文件"] = 别名
-	保存全局配置()
+	
+	# 3. 核心修复：仅手术级更新 [Settings] 段中的当前文件名，绝对不要调用 保存全局配置()
+	# 否则会把旧内存里的状态刷进新 Section 导致覆盖。
+	var config = ConfigFile.new()
+	config.load(全局配置路径)
+	config.set_value("Settings", "当前配置文件", 别名)
+	config.save(全局配置路径)
+	
+	# 4. 立即加载目标 Profile 的专属设置到内存
+	加载全局配置(别名)
+	
+	# 5. 加载新业务数据
 	加载预设()
 	if 树状数据.is_empty(): 初始化默认数据()
 
