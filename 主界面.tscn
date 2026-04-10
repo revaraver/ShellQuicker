@@ -186,6 +186,21 @@ placeholder_text = "模板的备注说明..."
 wrap_mode = 1
 scroll_fit_content_height = true
 
+[node name="启动目录栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1547000001]
+layout_mode = 2
+
+[node name="启动目录标签" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/启动目录栏" unique_id=1547000002]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "启动目录："
+
+[node name="启动目录输入" type="TextEdit" parent="布局容器/主体区域/右侧内容栈/预设详情面板/启动目录栏" unique_id=1547000003]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "可选，例如: D:\\项目\\工具；留空则使用真实执行目录"
+wrap_mode = 1
+scroll_fit_content_height = true
+
 [node name="前缀栏" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板" unique_id=1661888038]
 layout_mode = 2
 
@@ -254,17 +269,42 @@ theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 8
 
-[node name="预览布局" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M" unique_id=987478327]
+[node name="预览布局" type="VBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M" unique_id=987478327]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="预览标题" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局" unique_id=1142249929]
+[node name="执行目录行" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局" unique_id=1547000004]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="执行目录标题" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局/执行目录行" unique_id=1547000005]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
+text = "执行目录："
+
+[node name="执行目录预览" type="RichTextLabel" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局/执行目录行" unique_id=1547000006]
+layout_mode = 2
+size_flags_horizontal = 3
+focus_mode = 2
+mouse_default_cursor_shape = 1
+theme_override_colors/default_color = Color(0.8, 0.8, 0.8, 1)
+bbcode_enabled = true
+text = "预览执行目录..."
+fit_content = true
+selection_enabled = true
+
+[node name="命令预览行" type="HBoxContainer" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局" unique_id=1547000007]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="预览标题" type="Label" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局/命令预览行" unique_id=1142249929]
 layout_mode = 2
 size_flags_vertical = 0
 theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 1)
 text = "预计执行："
 
-[node name="详情预览" type="RichTextLabel" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局" unique_id=1986183659]
+[node name="详情预览" type="RichTextLabel" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局/命令预览行" unique_id=1986183659]
 layout_mode = 2
 size_flags_horizontal = 3
 focus_mode = 2
@@ -275,7 +315,7 @@ text = "预览执行指令..."
 fit_content = true
 selection_enabled = true
 
-[node name="复制指令按钮" type="Button" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局" unique_id=1142249930]
+[node name="复制指令按钮" type="Button" parent="布局容器/主体区域/右侧内容栈/预设详情面板/预览面板/M/预览布局/命令预览行" unique_id=1142249930]
 layout_mode = 2
 size_flags_vertical = 0
 text = " 📋 复制 "

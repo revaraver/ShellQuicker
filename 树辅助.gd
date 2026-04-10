@@ -13,3 +13,7 @@ func _can_drop_data(at_position, data):
 
 func _drop_data(at_position, data):
 	if 入口: 入口._drop_data_logic(at_position, data)
+
+func _notification(what):
+	if what == NOTIFICATION_DRAG_END and 入口:
+		入口._拖拽结束清理标识()

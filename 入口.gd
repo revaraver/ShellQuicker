@@ -24,6 +24,7 @@ var 搜夹连带子项勾选: CheckBox
 # 预设详情
 @onready var 预设名输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 标题栏 / 预设名称输入
 @onready var 预设说明输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预设说明输入
+@onready var 启动目录输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 启动目录栏 / 启动目录输入
 @onready var 前缀命令输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 前缀栏 / 前缀命令输入
 @onready var 核心命令输入 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 属性栏 / 核心命令输入
 @onready var 参数容器 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 参数滚屏 / 参数容器
@@ -35,8 +36,9 @@ var 搜夹连带子项勾选: CheckBox
 @onready var UTF8模式 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / UTF8模式
 @onready var 多开开关 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / 多开许可
 @onready var 执行时复制开关 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / 执行时复制
-@onready var 预览标签 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 详情预览
-@onready var 复制指令按钮 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 复制指令按钮
+@onready var 执行目录预览 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 执行目录行 / 执行目录预览
+@onready var 预览标签 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 命令预览行 / 详情预览
+@onready var 复制指令按钮 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 命令预览行 / 复制指令按钮
 @onready var 智能解析按钮 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 属性栏 / 智能解析按钮
 @onready var 执行按钮 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / 执行预设按钮
 
@@ -49,8 +51,13 @@ var _已折叠ID集合: Dictionary = {}
 var 正在重命名状态: bool = false
 var _正在加载UI: bool = false
 var 播放图标: Texture2D
-var 当前字体大小: int = 18
+var 当前字体大小: int = 20
 var 预览片段索引表: Array = [] # 格式: { "start": 0, "end": 10, "node": Node }
+var _树重命名输入框: LineEdit = null
+var _树重命名绑定尝试次数: int = 0
+var _拖拽上侧横线: ColorRect = null
+var _拖拽下侧横线: ColorRect = null
+var _拖拽子级高亮: ColorRect = null
 
 func _ready():
 	# --- 窗口自适应初始大小 (屏幕的一半并居中) ---
@@ -69,6 +76,7 @@ func _ready():
 	树状菜单.allow_rmb_select = true
 	树状菜单.set_script(load("res://树辅助.gd"))
 	树状菜单.入口 = self
+	_初始化拖拽落点标识()
 	
 	# --- 加载全局持久化配置 ---
 	_同步状态到UI()
@@ -108,9 +116,15 @@ func _ready():
 	快捷新建文件夹.pressed.connect(_右键菜单项被按下.bind(1))
 	
 	预设名输入.text_changed.connect(_自动保存当前预设)
+	预设名输入.text_changed.connect(更新预览)
 	预设名输入.focus_entered.connect(更新预览); 预设名输入.focus_exited.connect(更新预览)
 	预设说明输入.text_changed.connect(_自动保存当前预设)
+	预设说明输入.text_changed.connect(更新预览)
+	启动目录输入.text_changed.connect(_自动保存当前预设)
+	启动目录输入.text_changed.connect(更新预览)
+	启动目录输入.focus_entered.connect(更新预览); 启动目录输入.focus_exited.connect(更新预览)
 	前缀命令输入.text_changed.connect(_自动保存当前预设)
+	前缀命令输入.text_changed.connect(更新预览)
 	前缀命令输入.focus_entered.connect(更新预览); 前缀命令输入.focus_exited.connect(更新预览)
 	核心命令输入.text_changed.connect(_on_core_command_changed)
 	核心命令输入.focus_entered.connect(更新预览); 核心命令输入.focus_exited.connect(更新预览)
@@ -214,7 +228,9 @@ func _注入通用样式(节点:Node):
 			
 			# 为多行输入框特殊处理 Tab 键切换焦点
 			if 节点 is TextEdit:
-				节点.gui_input.connect(_TextEdit组件输入.bind(节点))
+				var 回调 = Callable(self, "_TextEdit组件输入").bind(节点)
+				if not 节点.gui_input.is_connected(回调):
+					节点.gui_input.connect(回调)
 		
 		# 增强 Tree 的内部编辑器样式
 		if 节点 is Tree:
@@ -292,12 +308,19 @@ func _input(event):
 		if event.ctrl_pressed and event.keycode == KEY_G:
 			_快捷范围合并()
 			get_viewport().set_input_as_handled(); return
+
+		# --- Ctrl + Shift + C 全局复制完整命令（输入状态也生效） ---
+		if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
+			_on_copy_command_pressed()
+			get_viewport().set_input_as_handled(); return
 		
 		# --- Ctrl + C 复制快捷键 (非输入状态) ---
+		# Ctrl+C：若预览有选中文本则复制选中，否则复制完整命令
+		# Ctrl+Shift+C：见上方全局分支
 		if event.ctrl_pressed and event.keycode == KEY_C:
 			var 是否在输入 = (焦点 is LineEdit or 焦点 is TextEdit)
 			if not 是否在输入:
-				_on_copy_command_pressed()
+				_复制预览选中或完整命令()
 				get_viewport().set_input_as_handled(); return
 		
 		if (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
@@ -418,7 +441,7 @@ func 创建参数行(键:String, 备注:String, 当前值:String):
 	var 备注输入 = TextEdit.new(); 备注输入.text = 备注; 备注输入.name = "Note"; 备注输入.placeholder_text = "参数说明..."; 备注输入.custom_minimum_size = Vector2(200, 0)
 	备注输入.size_flags_horizontal = Control.SIZE_EXPAND_FILL; 备注输入.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY; 备注输入.scroll_fit_content_height = true
 	备注输入.context_menu_enabled = false # 关闭系统菜单
-	备注输入.text_changed.connect(func(): _自动保存当前预设())
+	备注输入.text_changed.connect(func(): _自动保存当前预设(); 更新预览())
 	备注输入.focus_entered.connect(更新预览); 备注输入.focus_exited.connect(更新预览)
 	
 	var 删除按钮 = Button.new(); 删除按钮.text = " ✖ "; 删除按钮.add_theme_color_override("font_color", Color.INDIAN_RED); 删除按钮.focus_mode = Control.FOCUS_CLICK
@@ -481,11 +504,22 @@ func _加载数据到界面(数据:Dictionary):
 	_正在加载UI = false
 
 func _加载预设详情(数据:Dictionary):
-	预设名输入.text = 数据["名称"]; 预设说明输入.text = 数据.get("描述", ""); 前缀命令输入.text = 数据.get("前缀命令", ""); 核心命令输入.text = 数据["固定命令"]; Shell选择.selected = 数据.get("Shell类型", 0)
+	预设名输入.text = 数据["名称"]; 预设说明输入.text = 数据.get("描述", "")
+	var 启动目录值 = _清洗文本(数据.get("启动目录", ""))
+	# 启动目录输入框保持空值，默认执行目录通过 placeholder 告知用户
+	启动目录输入.text = 启动目录值
+	启动目录输入.placeholder_text = _获取真实执行目录()
+	前缀命令输入.text = 数据.get("前缀命令", ""); 核心命令输入.text = 数据["固定命令"]; Shell选择.selected = 数据.get("Shell类型", 0)
 	UTF8模式.button_pressed = 数据.get("UTF8模式", false)
 	for 子 in 参数容器.get_children(): 子.queue_free()
 	for 项 in 数据.get("参数列表", []): 创建参数行(项["键"], 项["备注"], 项.get("当前值", ""))
 	更新预览()
+
+# 真实执行目录（用于默认启动目录）
+func _获取真实执行目录() -> String:
+	var 目录 = ProjectSettings.globalize_path("res://").replace("/", "\\")
+	if 目录.ends_with("\\"): 目录 = 目录.left(-1)
+	return 目录
 
 func _智能解析并覆盖参数(文本:String):
 	if _正在加载UI: return
@@ -551,7 +585,7 @@ func _智能解析并覆盖参数(文本:String):
 func _同步状态到UI():
 	# 从配置管理器加载新 Profile 的数据到 UI
 	_加载折叠到内存()
-	当前字体大小 = 配置管理器.全局配置.get("字体大小", 18)
+	当前字体大小 = 配置管理器.全局配置.get("字体大小", 20)
 	搜文件夹备注勾选.button_pressed = 配置管理器.全局配置.get("搜文件夹备注", true)
 	搜模板备注勾选.button_pressed = 配置管理器.全局配置.get("搜模板备注", true)
 	执行时复制开关.button_pressed = 配置管理器.全局配置.get("执行时复制", false)
@@ -660,7 +694,7 @@ func _搜索递归增强(项:TreeItem, 文本:String, 祖先强行显示: bool =
 func _自动保存当前预设():
 	if _正在加载UI or 当前选中ID == "": return
 	var 数据 = 配置管理器.树状数据.get(当前选中ID); if !数据 or 数据["类型"] != "预设": return
-	数据["名称"] = 预设名输入.text; 数据["描述"] = 预设说明输入.text; 数据["前缀命令"] = 前缀命令输入.text; 数据["固定命令"] = 核心命令输入.text; 数据["Shell类型"] = Shell选择.selected
+	数据["名称"] = 预设名输入.text; 数据["描述"] = 预设说明输入.text; 数据["启动目录"] = 启动目录输入.text; 数据["前缀命令"] = 前缀命令输入.text; 数据["固定命令"] = 核心命令输入.text; 数据["Shell类型"] = Shell选择.selected
 	数据["UTF8模式"] = UTF8模式.button_pressed
 	数据["参数列表"] = []
 	for 行 in 参数容器.get_children():
@@ -680,48 +714,28 @@ func _自动保存当前文件夹():
 
 func _get_drag_data_logic(_pos):
 	var selected = _获取所有选中项(); if selected.is_empty(): return null
-	var preview = Label.new(); preview.text = " 📦 多选移动中(" + str(selected.size()) + ")" if selected.size() > 1 else " 📦 " + selected[0].get_text(0)
+	var preview = Label.new(); preview.text = " ?? 多选移动中(" + str(selected.size()) + ")" if selected.size() > 1 else " ?? " + selected[0].get_text(0)
+	_清理拖拽落点标识()
 	树状菜单.set_drag_preview(preview); return selected
 
-func _can_drop_data_logic(_pos, data):
-	return data is Array and !data.is_empty() and data[0] is TreeItem
+func _can_drop_data_logic(鼠标位置, 拖拽数据):
+	var 落点信息 = _计算拖拽落点(鼠标位置, 拖拽数据)
+	_更新拖拽落点标识(落点信息)
+	return 落点信息.get("是否有效", false)
 
-func _drop_data_logic(pos, items):
-	var drop_section = 树状菜单.get_drop_section_at_position(pos)
-	var target = 树状菜单.get_item_at_position(pos)
-	if !target: return
+func _drop_data_logic(鼠标位置, 拖拽项):
+	var 落点信息 = _计算拖拽落点(鼠标位置, 拖拽项)
+	_清理拖拽落点标识()
+	if !落点信息.get("是否有效", false): return
 	
-	var target_id = target.get_metadata(0)
-	var 目标数据 = 配置管理器.树状数据.get(target_id)
-	if !目标数据: return
-	
-	var 新父ID = ""
-	var 插入索引 = -1
-	
-	if drop_section == 0: # 落在项正中间
-		if 目标数据["类型"] == "文件夹":
-			新父ID = target_id
-			插入索引 = 0 # 移入文件夹头部
-		else:
-			新父ID = 目标数据.get("父节点", "")
-			var 兄弟们 = 配置管理器.获取子节点(新父ID)
-			for k in range(兄弟们.size()):
-				if 兄弟们[k]["ID"] == target_id: 插入索引 = k; break
-	else: # 落在项的上方或下方
-		新父ID = 目标数据.get("父节点", "")
-		var 兄弟们 = 配置管理器.获取子节点(新父ID)
-		for k in range(兄弟们.size()):
-			if 兄弟们[k]["ID"] == target_id:
-				插入索引 = k if drop_section == -1 else k + 1
-				break
+	var 新父ID = 落点信息.get("新父ID", "")
+	var 插入索引 = 落点信息.get("插入索引", -1)
+	var 目标ID = 落点信息.get("目标ID", "")
+	var 移动项ID集 = _提取可移动项ID集(拖拽项, 目标ID, 新父ID)
+	if 移动项ID集.is_empty(): return
 
-	var 移动项ID集 = []
-	for item in items:
-		var id = item.get_metadata(0)
-		if id == target_id: continue
-		if 配置管理器.树状数据[id]["类型"] == "文件夹" and _检查是否为子孙(id, 新父ID): continue
-		配置管理器.树状数据[id]["父节点"] = 新父ID
-		移动项ID集.append(id)
+	for 节点ID in 移动项ID集:
+		配置管理器.树状数据[节点ID]["父节点"] = 新父ID
 	
 	# 同步所有兄弟的排序权重
 	var 原兄弟们 = 配置管理器.获取子节点(新父ID)
@@ -741,6 +755,135 @@ func _drop_data_logic(pos, items):
 	if 移动项ID集.size() > 0:
 		_递归选中树项(树状菜单.get_root(), 移动项ID集[0])
 
+func _初始化拖拽落点标识():
+	if is_instance_valid(_拖拽上侧横线): return
+	
+	_拖拽上侧横线 = ColorRect.new()
+	_拖拽上侧横线.name = "拖拽上侧横线"
+	_拖拽上侧横线.color = Color(0.20, 0.82, 1.0, 0.95)
+	_拖拽上侧横线.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_拖拽上侧横线.visible = false
+	树状菜单.add_child(_拖拽上侧横线)
+	
+	_拖拽下侧横线 = ColorRect.new()
+	_拖拽下侧横线.name = "拖拽下侧横线"
+	_拖拽下侧横线.color = Color(0.20, 0.82, 1.0, 0.95)
+	_拖拽下侧横线.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_拖拽下侧横线.visible = false
+	树状菜单.add_child(_拖拽下侧横线)
+	
+	_拖拽子级高亮 = ColorRect.new()
+	_拖拽子级高亮.name = "拖拽子级高亮"
+	_拖拽子级高亮.color = Color(0.20, 0.82, 1.0, 0.18)
+	_拖拽子级高亮.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_拖拽子级高亮.visible = false
+	树状菜单.add_child(_拖拽子级高亮)
+
+func _更新拖拽落点标识(落点信息: Dictionary):
+	if !is_instance_valid(_拖拽上侧横线): return
+	_清理拖拽落点标识()
+	if !落点信息.get("是否有效", false): return
+	var 目标项 = 落点信息.get("目标项", null)
+	if 目标项 == null: return
+	
+	var 行区域 = 树状菜单.get_item_area_rect(目标项, 0)
+	if 行区域.size.y <= 0.0: return
+	
+	var 横线左侧 = 6.0
+	var 横线宽度 = max(树状菜单.size.x - 12.0, 4.0)
+	var 横线厚度 = 2.0
+	var 落点段 = 落点信息.get("落点段", 0)
+	var 是否子级落点 = 落点信息.get("是否子级落点", false)
+	
+	if 是否子级落点:
+		_拖拽子级高亮.position = Vector2(2.0, 行区域.position.y)
+		_拖拽子级高亮.size = Vector2(max(树状菜单.size.x - 4.0, 4.0), 行区域.size.y)
+		_拖拽子级高亮.visible = true
+		return
+	
+	if 落点段 <= 0:
+		_拖拽上侧横线.position = Vector2(横线左侧, 行区域.position.y)
+		_拖拽上侧横线.size = Vector2(横线宽度, 横线厚度)
+		_拖拽上侧横线.visible = true
+	else:
+		_拖拽下侧横线.position = Vector2(横线左侧, 行区域.position.y + 行区域.size.y - 横线厚度)
+		_拖拽下侧横线.size = Vector2(横线宽度, 横线厚度)
+		_拖拽下侧横线.visible = true
+
+func _清理拖拽落点标识():
+	if is_instance_valid(_拖拽上侧横线): _拖拽上侧横线.visible = false
+	if is_instance_valid(_拖拽下侧横线): _拖拽下侧横线.visible = false
+	if is_instance_valid(_拖拽子级高亮): _拖拽子级高亮.visible = false
+
+func _提取可移动项ID集(拖拽数据, 目标ID: String, 新父ID: String) -> Array:
+	var 结果: Array = []
+	if !(拖拽数据 is Array): return 结果
+	for 项 in 拖拽数据:
+		if !(项 is TreeItem): continue
+		var 节点ID = str(项.get_metadata(0))
+		if 节点ID == "" or 节点ID == 目标ID: continue
+		if !配置管理器.树状数据.has(节点ID): continue
+		if 配置管理器.树状数据[节点ID]["类型"] == "文件夹" and _检查是否为子孙(节点ID, 新父ID): continue
+		结果.append(节点ID)
+	return 结果
+
+func _计算拖拽落点(鼠标位置, 拖拽数据) -> Dictionary:
+	var 默认结果 = {
+		"是否有效": false,
+		"目标项": null,
+		"目标ID": "",
+		"新父ID": "",
+		"插入索引": -1,
+		"落点段": 0,
+		"是否子级落点": false
+	}
+	if !(拖拽数据 is Array) or 拖拽数据.is_empty() or !(拖拽数据[0] is TreeItem):
+		return 默认结果
+	
+	var 目标项 = 树状菜单.get_item_at_position(鼠标位置)
+	var 落点段 = 树状菜单.get_drop_section_at_position(鼠标位置)
+	if !目标项 or !(落点段 in [-1, 0, 1]):
+		return 默认结果
+	
+	var 目标ID = str(目标项.get_metadata(0))
+	if 目标ID == "":
+		return 默认结果
+	var 目标数据 = 配置管理器.树状数据.get(目标ID)
+	if !目标数据:
+		return 默认结果
+	
+	var 新父ID = ""
+	var 插入索引 = -1
+	var 是否子级落点 = false
+	
+	if 落点段 == 0 and 目标数据["类型"] == "文件夹":
+		新父ID = 目标ID
+		插入索引 = 0
+		是否子级落点 = true
+	else:
+		新父ID = 目标数据.get("父节点", "")
+		var 兄弟们 = 配置管理器.获取子节点(新父ID)
+		for k in range(兄弟们.size()):
+			if 兄弟们[k]["ID"] == 目标ID:
+				插入索引 = k if 落点段 <= 0 else k + 1
+				break
+	
+	var 可移动项ID集 = _提取可移动项ID集(拖拽数据, 目标ID, 新父ID)
+	if 可移动项ID集.is_empty():
+		return 默认结果
+	
+	return {
+		"是否有效": 插入索引 >= 0,
+		"目标项": 目标项,
+		"目标ID": 目标ID,
+		"新父ID": 新父ID,
+		"插入索引": 插入索引,
+		"落点段": 落点段,
+		"是否子级落点": 是否子级落点
+	}
+
+func _拖拽结束清理标识():
+	_清理拖拽落点标识()
 func _检查是否为子孙(祖先ID: String, 目标ID: String) -> bool:
 	if 目标ID == "": return false
 	if 祖先ID == 目标ID: return true
@@ -753,9 +896,18 @@ func _检查是否为子孙(祖先ID: String, 目标ID: String) -> bool:
 
 func 更新预览():
 	var 焦点 = get_viewport().gui_get_focus_owner()
+	var 启动目录 = _清洗文本(启动目录输入.text)
 	var prefix_cmd = _清洗文本(前缀命令输入.text)
 	var base_cmd = _清洗文本(核心命令输入.text)
 	var final_bb = ""
+	var 目录_bb = ""
+	var 真实执行目录 = _获取真实执行目录()
+	var 显示执行目录 = 启动目录 if 启动目录 != "" else 真实执行目录
+	var 目录是否聚焦 = (焦点 == 启动目录输入)
+	if 目录是否聚焦:
+		目录_bb = "[color=#00ff88]" + 显示执行目录 + "[/color]"
+	else:
+		目录_bb = "[color=#aaaaaa]" + 显示执行目录 + "[/color]"
 	
 	# 前缀 (chcp 等) - 灰色显示
 	var 连接符 = " && " if (Shell选择.selected == 0 or Shell选择.selected == 2) else " ; "
@@ -785,6 +937,7 @@ func 更新预览():
 		else:
 			final_bb += "[color=#aaaaaa]" + 显示文本 + "[/color]"
 	
+	执行目录预览.text = 目录_bb
 	预览标签.text = final_bb
 
 func _弹出参数右键菜单(目标行:HBoxContainer):
@@ -917,6 +1070,22 @@ func _on_copy_command_pressed():
 	DisplayServer.clipboard_set(预览标签.get_parsed_text())
 	预览标签.select_all()
 
+func _复制预览选中或完整命令():
+	# 优先复制预览区选中文字（命令预览/执行目录），若无选中则回退到完整命令
+	var 焦点 = get_viewport().gui_get_focus_owner()
+	var 目录选中 = 执行目录预览.get_selected_text()
+	var 命令选中 = 预览标签.get_selected_text()
+	if 焦点 == 执行目录预览 and 目录选中 != "":
+		DisplayServer.clipboard_set(目录选中)
+	elif 焦点 == 预览标签 and 命令选中 != "":
+		DisplayServer.clipboard_set(命令选中)
+	elif 目录选中 != "":
+		DisplayServer.clipboard_set(目录选中)
+	elif 命令选中 != "":
+		DisplayServer.clipboard_set(命令选中)
+	else:
+		_on_copy_command_pressed()
+
 func _on_layout_dragged(offset):
 	配置管理器.全局配置["split_offset"] = offset
 	配置管理器.保存全局配置()
@@ -932,6 +1101,7 @@ func _点击执行():
 	_自动保存当前预设()
 	var 数据 = 配置管理器.树状数据[当前选中ID]
 	
+	var 启动目录 = _清洗文本(数据.get("启动目录", ""))
 	var prefix = _清洗文本(数据.get("前缀命令", ""))
 	var core_cmd = _清洗文本(数据.get("固定命令", ""))
 	
@@ -951,27 +1121,35 @@ func _点击执行():
 	if 执行时复制开关.button_pressed:
 		DisplayServer.clipboard_set(完整命令)
 	
-	_拉起窗口(Shell选择.selected, 完整命令, 数据.get("UTF8模式", false))
+	_拉起窗口(Shell选择.selected, 完整命令, 数据.get("UTF8模式", false), 启动目录)
 
-func _拉起窗口(类型:int, 完整命令:String, 开启UTF8: bool = false):
+func _拉起窗口(类型:int, 完整命令:String, 开启UTF8: bool = false, 启动目录:String = ""):
 	var 命令 = 完整命令
 	var 是PS = (类型 == 1 or 类型 == 3)
+	var 工作目录 = 启动目录
+	if 工作目录 == "":
+		工作目录 = ProjectSettings.globalize_path("res://")
 	
 	# --- 添加命令回显提示 ---
 	var 基础路径 = ProjectSettings.globalize_path("res://").replace("/", "\\")
 	if 基础路径.ends_with("\\"): 基础路径 = 基础路径.left(-1)
+	var 显示目录 = 工作目录.replace("/", "\\")
+	if 显示目录.ends_with("\\"): 显示目录 = 显示目录.left(-1)
+	var CMD显示目录 = 显示目录.replace("^", "^^").replace("&", "^&").replace("|", "^|").replace(">", "^>").replace("<", "^<")
 	
 	if 是PS:
 		# PS 使用 Write-Host 提供颜色高亮，单引号内两单引号表示转义
 		var 安全串 = 完整命令.replace("'", "''")
 		var 提示 = "Write-Host '[ShellQuicker | PowerShell]' -ForegroundColor DarkCyan ; "
-		提示 += "Write-Host 'PS " + 基础路径 + "> ' -NoNewline ; "
+		提示 += "Set-Location -LiteralPath '" + 工作目录.replace("'", "''") + "' ; "
+		提示 += "Write-Host 'PS " + 显示目录.replace("'", "''") + "> ' -NoNewline ; "
 		提示 += "Write-Host '" + 安全串 + "' -ForegroundColor White ; "
 		命令 = 提示 + 完整命令
 	else:
 		# CMD 使用 echo，转义管道和逻辑符防截断
 		var 安全串 = 完整命令.replace("&", "^&").replace("|", "^|").replace(">", "^>").replace("<", "^<")
-		var 提示 = "echo [ShellQuicker ^| CMD] & echo " + 基础路径 + "^> " + 安全串 + " & "
+		var 安全目录 = 工作目录.replace("^", "^^").replace("&", "^&").replace("|", "^|").replace(">", "^>").replace("<", "^<")
+		var 提示 = "cd /d \"" + 安全目录 + "\" & echo [ShellQuicker ^| CMD] & echo " + CMD显示目录 + "^> " + 安全串 + " & "
 		命令 = 提示 + 完整命令
 	
 	if 开启UTF8:
@@ -996,6 +1174,7 @@ func _树上运行图标被点击(项:TreeItem, _c, _i, _idx):
 	if 数据 and 数据["类型"] == "预设":
 		if node_id == 当前选中ID:_自动保存当前预设()
 
+		var 启动目录 = _清洗文本(数据.get("启动目录", ""))
 		var prefix = _清洗文本(数据.get("前缀命令", ""))
 		var core_cmd = 数据.get("固定命令", "")
 
@@ -1011,13 +1190,55 @@ func _树上运行图标被点击(项:TreeItem, _c, _i, _idx):
 		if 执行时复制开关.button_pressed:
 			DisplayServer.clipboard_set(完整命令)
 
-		_拉起窗口(数据.get("Shell类型", 0), 完整命令, 数据.get("UTF8模式", false))
+		_拉起窗口(数据.get("Shell类型", 0), 完整命令, 数据.get("UTF8模式", false), 启动目录)
 
 func _触发重命名(项:TreeItem):
 	if !项: return
-	正在重命名状态 = true; 项.set_editable(0, true); 树状菜单.edit_selected()
+	正在重命名状态 = true
+	树状菜单.grab_focus()
+	项.set_editable(0, true)
+	树状菜单.edit_selected()
+	# Tree 内联编辑器创建可能晚于一帧，改为重试绑定避免漏连
+	_树重命名绑定尝试次数 = 0
+	_树重命名输入框 = null
+	get_tree().process_frame.connect(_绑定树重命名实时同步, CONNECT_ONE_SHOT)
+
+func _绑定树重命名实时同步():
+	if not 正在重命名状态: return
+	var 焦点 = get_viewport().gui_get_focus_owner()
+	if 焦点 is LineEdit and 树状菜单.is_ancestor_of(焦点):
+		_树重命名输入框 = 焦点
+		var 回调 = Callable(self, "_树重命名进行中")
+		if not _树重命名输入框.text_changed.is_connected(回调):
+			_树重命名输入框.text_changed.connect(回调)
+		_树重命名进行中(_树重命名输入框.text)
+		return
+
+	# 未取到 Tree 内联 LineEdit 时，继续尝试若干帧
+	_树重命名绑定尝试次数 += 1
+	if _树重命名绑定尝试次数 < 24:
+		get_tree().process_frame.connect(_绑定树重命名实时同步, CONNECT_ONE_SHOT)
+
+func _树重命名进行中(新名:String):
+	if not 正在重命名状态: return
+	var 项 = 树状菜单.get_selected()
+	if !项: return
+	var id = 项.get_metadata(0)
+	if id != 当前选中ID: return
+	if 预设面板.visible:
+		if 预设名输入.text != 新名: 预设名输入.text = 新名
+	elif 文件夹面板.visible:
+		if 文件夹标题.text != 新名: 文件夹标题.text = 新名
 
 func _树项编辑完成():
+	# 清理实时同步连接，避免悬挂连接
+	if is_instance_valid(_树重命名输入框):
+		var 回调 = Callable(self, "_树重命名进行中")
+		if _树重命名输入框.text_changed.is_connected(回调):
+			_树重命名输入框.text_changed.disconnect(回调)
+	_树重命名输入框 = null
+	_树重命名绑定尝试次数 = 0
+
 	正在重命名状态 = false; var 项 = 树状菜单.get_selected()
 	if 项:
 		var id = 项.get_metadata(0); var 新名 = 项.get_text(0)
@@ -1096,7 +1317,7 @@ func _右键菜单项被按下(id: int):
 			var nid = str(Time.get_ticks_msec())
 			var 数据 = {}
 			if id == 0:
-				数据 = {"名称": "新模板", "类型": "预设", "父节点": 目标父ID,"固定命令": "", "参数列表": [], "Shell类型": 0, "order": 999}
+				数据 = {"名称": "新模板", "类型": "预设", "父节点": 目标父ID,"启动目录": "", "固定命令": "", "参数列表": [], "Shell类型": 0, "order": 999}
 			else:
 				数据 = {"名称": "新分类", "类型": "文件夹", "父节点": 目标父ID,"描述": "", "order": 999}
 			
@@ -1161,6 +1382,7 @@ func _请求新建配置():
 	var dialog = AcceptDialog.new(); dialog.title = "新建配置"; add_child(dialog)
 	var input = LineEdit.new(); input.placeholder_text = "输入新配置文件名..."; dialog.add_child(input)
 	dialog.get_ok_button().text = "创建"
+	_注入通用样式(dialog)
 	dialog.confirmed.connect(func():
 		var n = input.text.strip_edges()
 		if n != "" and 配置管理器.新建配置文件(n):
@@ -1175,6 +1397,7 @@ func _请求重命名配置():
 	var dialog = AcceptDialog.new(); dialog.title = "重命名配置"; add_child(dialog)
 	var input = LineEdit.new(); input.text = 配置管理器.配置文件别名;dialog.add_child(input)
 	dialog.get_ok_button().text = "确定"
+	_注入通用样式(dialog)
 	dialog.confirmed.connect(func():
 		var n = input.text.strip_edges()
 		if n != "" and 配置管理器.重命名当前配置(n):
@@ -1187,6 +1410,7 @@ func _请求重命名配置():
 func _请求删除配置():
 	var dialog = ConfirmationDialog.new(); dialog.title = "删除确认"; dialog.dialog_text = "确定要删除当前配置文件吗？该操作不可撤销。"
 	add_child(dialog)
+	_注入通用样式(dialog)
 	dialog.confirmed.connect(func():
 		配置管理器.删除当前配置()
 		_完整状态恢复流程() 
