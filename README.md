@@ -366,7 +366,8 @@ ShellQuicker/
 
 ## 界面预览
 
-![界面截图](https://github.com/user-attachments/assets/18b138dd-c712-4553-bd4b-f1e48673051f)
+![界面截图]
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2b710cb6-56d5-4665-8302-26a1c1f56e75" />
 
 ---
 
