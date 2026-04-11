@@ -47,29 +47,20 @@ var 搜夹连带子项勾选: CheckBox
 @onready var 文件夹描述 = $布局容器 / 主体区域 / 右侧内容栈 / 文件夹详情面板 / 文件夹描述输入
 
 var 当前选中ID: String = ""
-var 正在重命名状态: bool = false
 var _正在加载UI: bool = false
 var 播放图标: Texture2D
 var 当前字体大小: int = 20
 var 预览片段索引表: Array = [] # 格式: { "start": 0, "end": 10, "node": Node }
-var _树重命名输入框: LineEdit = null
-var _树重命名绑定尝试次数: int = 0
-var _拖拽上侧横线: ColorRect = null
-var _拖拽下侧横线: ColorRect = null
-var _拖拽子级高亮: ColorRect = null
-var _拖拽占位块: ColorRect = null
-var _拖拽预览已启用: bool = false
-var _拖拽预览父节点覆盖: Dictionary = {}
-var _拖拽预览排序覆盖: Dictionary = {}
-var _拖拽预览签名: String = ""
-var _拖拽最后有效落点: Dictionary = {}
-var _拖拽最后签名: String = ""
-var _是否正在拖拽: bool = false
-var _拖拽标识动画表: Dictionary = {}
-var _拖拽起始父ID: String = ""
 var _窗口快捷键控制器 = preload("res://窗口快捷键控制器.gd").new()
 var _配置切换管理器 = preload("res://配置切换管理器.gd").new()
 var _树渲染搜索管理器 = preload("res://树渲染搜索管理器.gd").new()
+var _命令执行管理器 = preload("res://命令执行管理器.gd").new()
+var _树拖拽管理器 = preload("res://树拖拽管理器.gd").new()
+var _参数编辑管理器 = preload("res://参数编辑管理器.gd").new()
+var _树项操作管理器 = preload("res://树项操作管理器.gd").new()
+var _是否已计划延迟保存: bool = false
+var _待保存预设: bool = false
+var _待保存文件夹: bool = false
 
 func _ready():
 	# --- 窗口自适应初始大小 (屏幕的一半并居中) ---
@@ -85,11 +76,14 @@ func _ready():
 
 	_加载内置图标()
 	_初始化树渲染搜索管理器()
+	_初始化命令执行管理器()
+	_初始化参数编辑管理器()
+	_初始化树项操作管理器()
 	树状菜单.select_mode = Tree.SELECT_MULTI
 	树状菜单.allow_rmb_select = true
 	树状菜单.set_script(load("res://树辅助.gd"))
 	树状菜单.入口 = self
-	_初始化拖拽落点标识()
+	_初始化树拖拽管理器()
 	
 	# --- 加载全局持久化配置 ---
 	_同步状态到UI()
@@ -119,35 +113,35 @@ func _ready():
 	字体缩小按钮.pressed.connect(_调整字体大小.bind(-2))
 	
 	添加参数按钮.pressed.connect(func(): 创建参数行("", "", ""))
-	执行按钮.pressed.connect(_点击执行)
+	执行按钮.pressed.connect(_命令执行管理器.点击执行)
 	右键菜单.id_pressed.connect(_右键菜单项被按下)
 	
 	快捷新建模板.pressed.connect(_右键菜单项被按下.bind(0))
 	快捷新建文件夹.pressed.connect(_右键菜单项被按下.bind(1))
 	
-	预设名输入.text_changed.connect(_自动保存当前预设)
+	预设名输入.text_changed.connect(_计划保存当前预设)
 	预设名输入.text_changed.connect(更新预览)
 	预设名输入.focus_entered.connect(更新预览); 预设名输入.focus_exited.connect(更新预览)
-	预设说明输入.text_changed.connect(_自动保存当前预设)
+	预设说明输入.text_changed.connect(_计划保存当前预设)
 	预设说明输入.text_changed.connect(更新预览)
-	启动目录输入.text_changed.connect(_自动保存当前预设)
+	启动目录输入.text_changed.connect(_计划保存当前预设)
 	启动目录输入.text_changed.connect(更新预览)
 	启动目录输入.focus_entered.connect(更新预览); 启动目录输入.focus_exited.connect(更新预览)
-	前缀命令输入.text_changed.connect(_自动保存当前预设)
+	前缀命令输入.text_changed.connect(_计划保存当前预设)
 	前缀命令输入.text_changed.connect(更新预览)
 	前缀命令输入.focus_entered.connect(更新预览); 前缀命令输入.focus_exited.connect(更新预览)
-	核心命令输入.text_changed.connect(_on_core_command_changed)
+	核心命令输入.text_changed.connect(_命令执行管理器.核心命令已变更)
 	核心命令输入.focus_entered.connect(更新预览); 核心命令输入.focus_exited.connect(更新预览)
 	智能解析按钮.pressed.connect(func(): _智能解析并覆盖参数(核心命令输入.text))
-	Shell选择.item_selected.connect(_on_executor_setting_changed)
-	UTF8模式.toggled.connect(_on_executor_setting_changed)
+	Shell选择.item_selected.connect(_命令执行管理器.执行器设置已变更)
+	UTF8模式.toggled.connect(_命令执行管理器.执行器设置已变更)
 	多开开关.toggled.connect(_on_allow_multiple_toggled)
 	执行时复制开关.toggled.connect(_on_copy_on_execute_toggled)
-	复制指令按钮.pressed.connect(_on_copy_command_pressed)
+	复制指令按钮.pressed.connect(_命令执行管理器.复制完整命令)
 
 	
-	文件夹描述.text_changed.connect(_自动保存当前文件夹)
-	文件夹标题.text_changed.connect(_自动保存当前文件夹)
+	文件夹描述.text_changed.connect(_计划保存当前文件夹)
+	文件夹标题.text_changed.connect(_计划保存当前文件夹)
 	
 	var 主体区域 = $布局容器 / 主体区域
 	主体区域.split_offset = 配置管理器.全局配置.get("split_offset", 350)
@@ -234,6 +228,81 @@ func _初始化树渲染搜索管理器():
 		Callable(self, "_递归选中树项"),
 		Callable(self, "_获取用于渲染的子节点")
 	)
+
+func _初始化命令执行管理器():
+	_命令执行管理器.初始化(
+		self,
+		配置管理器,
+		参数容器,
+		启动目录输入,
+		前缀命令输入,
+		核心命令输入,
+		预设面板,
+		执行目录预览,
+		预览标签,
+		Shell选择,
+		UTF8模式,
+		执行时复制开关,
+		Callable(self, "_获取当前选中ID"),
+		Callable(self, "_计划保存当前预设"),
+		Callable(self, "_自动保存当前预设"),
+		Callable(self, "_清洗文本")
+	)
+
+func _获取当前选中ID() -> String:
+	return 当前选中ID
+
+func _设置当前选中ID(值: String):
+	当前选中ID = 值
+
+func _初始化参数编辑管理器():
+	_参数编辑管理器.初始化(
+		self,
+		参数容器,
+		核心命令输入,
+		预设名输入,
+		Callable(self, "_获取正在加载UI"),
+		Callable(self, "_设置正在加载UI"),
+		Callable(self, "_计划保存当前预设"),
+		Callable(self, "更新预览"),
+		Callable(self, "_注入通用样式"),
+		Callable(self, "_清洗文本")
+	)
+
+func _获取正在加载UI() -> bool:
+	return _正在加载UI
+
+func _设置正在加载UI(值: bool):
+	_正在加载UI = 值
+
+func _初始化树项操作管理器():
+	_树项操作管理器.初始化(
+		self,
+		配置管理器,
+		树状菜单,
+		右键菜单,
+		预设面板,
+		文件夹面板,
+		预设名输入,
+		文件夹标题,
+		Callable(self, "_获取当前选中ID"),
+		Callable(self, "_设置当前选中ID"),
+		Callable(self, "_树项被选中"),
+		Callable(self, "刷新树状菜单"),
+		Callable(self, "_动态更新当前搜索"),
+		Callable(self, "_自动保存当前预设")
+	)
+
+func _初始化树拖拽管理器():
+	_树拖拽管理器.初始化(
+		配置管理器,
+		树状菜单,
+		_树渲染搜索管理器,
+		Callable(self, "_获取当前选中ID"),
+		Callable(self, "_获取所有选中项"),
+		Callable(self, "_递归选中树项")
+	)
+	_树拖拽管理器.初始化拖拽落点标识()
 
 func _初始化配置切换管理器():
 	_配置切换管理器.初始化(
@@ -434,14 +503,14 @@ func _处理键盘输入(event: InputEventKey):
 	if _处理控制组合快捷键(event, 焦点):
 		return
 	var 选中 = 树状菜单.get_selected()
-	if not 选中 or 正在重命名状态:
+	if not 选中 or _树项操作管理器.是否正在重命名():
 		return
 	_处理树焦点快捷键(event, 焦点, 选中)
 
 func _处理全局命令快捷键(event: InputEventKey, 焦点: Control) -> bool:
 	# --- 强制/全局运行快捷键 ---
 	if event.ctrl_pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
-		_点击执行()
+		_命令执行管理器.点击执行()
 		get_viewport().set_input_as_handled()
 		return true
 	# --- Shift + Enter 智能解析 (输入状态下也有效) ---
@@ -461,7 +530,7 @@ func _处理全局命令快捷键(event: InputEventKey, 焦点: Control) -> bool
 		return true
 	# --- Ctrl + Shift + C 全局复制完整命令（输入状态也生效） ---
 	if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
-		_on_copy_command_pressed()
+		_命令执行管理器.复制完整命令()
 		get_viewport().set_input_as_handled()
 		return true
 	# --- Ctrl + C 复制快捷键 (非输入状态) ---
@@ -470,12 +539,12 @@ func _处理全局命令快捷键(event: InputEventKey, 焦点: Control) -> bool
 	if event.ctrl_pressed and event.keycode == KEY_C:
 		var 是否在输入 = (焦点 is LineEdit or 焦点 is TextEdit)
 		if not 是否在输入:
-			_复制预览选中或完整命令()
+			_命令执行管理器.复制预览选中或完整命令()
 			get_viewport().set_input_as_handled()
 			return true
 	if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
 		if not (焦点 is TextEdit):
-			_点击执行()
+			_命令执行管理器.点击执行()
 			get_viewport().set_input_as_handled()
 			return true
 	return false
@@ -512,7 +581,7 @@ func _处理树焦点快捷键(event: InputEventKey, 焦点: Control, 选中: Tr
 		KEY_DELETE:
 			_点击删除动作()
 		KEY_ENTER:
-			_点击执行()
+			_命令执行管理器.点击执行()
 		KEY_D:
 			if event.ctrl_pressed:
 				_点击克隆动作()
@@ -592,65 +661,7 @@ func _执行双击改名():
 	var 选中 = 树状菜单.get_selected(); if 选中:_触发重命名(选中)
 
 func 创建参数行(键:String, 备注:String, 当前值:String):
-	var 行 = HBoxContainer.new(); 行.add_theme_constant_override("separation", 10)
-	
-	var 键输入 = TextEdit.new(); 键输入.text = 键; 键输入.name = "Key"; 键输入.placeholder_text = "变量键"; 键输入.custom_minimum_size = Vector2(120, 0)
-	键输入.size_flags_horizontal = Control.SIZE_EXPAND_FILL; 键输入.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY; 键输入.scroll_fit_content_height = true
-	键输入.context_menu_enabled = false # 关闭系统菜单
-	键输入.text_changed.connect(func(): _自动保存当前预设(); 更新预览())
-	键输入.focus_entered.connect(更新预览); 键输入.focus_exited.connect(更新预览)
-	
-	var 值输入 = TextEdit.new(); 值输入.text = 当前值; 值输入.name = "Value"; 值输入.placeholder_text = "值"; 值输入.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	值输入.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY; 值输入.scroll_fit_content_height = true
-	值输入.context_menu_enabled = false # 关闭系统菜单
-	值输入.text_changed.connect(func(): _自动保存当前预设(); 更新预览())
-	值输入.focus_entered.connect(更新预览); 值输入.focus_exited.connect(更新预览)
-	
-	var 备注输入 = TextEdit.new(); 备注输入.text = 备注; 备注输入.name = "Note"; 备注输入.placeholder_text = "参数说明..."; 备注输入.custom_minimum_size = Vector2(200, 0)
-	备注输入.size_flags_horizontal = Control.SIZE_EXPAND_FILL; 备注输入.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY; 备注输入.scroll_fit_content_height = true
-	备注输入.context_menu_enabled = false # 关闭系统菜单
-	备注输入.text_changed.connect(func(): _自动保存当前预设(); 更新预览())
-	备注输入.focus_entered.connect(更新预览); 备注输入.focus_exited.connect(更新预览)
-	
-	var 删除按钮 = Button.new(); 删除按钮.text = " ✖ "; 删除按钮.add_theme_color_override("font_color", Color.INDIAN_RED); 删除按钮.focus_mode = Control.FOCUS_CLICK
-	删除按钮.pressed.connect(func():
-		if !is_instance_valid(行): return
-		行.queue_free()
-		get_tree().process_frame.connect(func(): _自动保存当前预设(); 更新预览(), CONNECT_ONE_SHOT)
-	)
-	
-	行.add_child(键输入); 行.add_child(值输入); 行.add_child(备注输入); 行.add_child(删除按钮)
-	
-	# 右键合并功能支持
-	var 响应界面 = [行, 键输入, 值输入, 备注输入]
-	for ctrl in 响应界面:
-		ctrl.gui_input.connect(func(e):
-			if is_instance_valid(行) and e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_RIGHT:
-				_弹出参数右键菜单(行)
-		)
-
-	# --- 智能插入位置逻辑 ---
-	var 插入索引 = -1
-	if not _正在加载UI:
-		var 焦点 = get_viewport().gui_get_focus_owner()
-		if 焦点:
-			if 焦点 == 核心命令输入:
-				插入索引 = 0
-			else:
-				var 列表 = 参数容器.get_children()
-				for i in range(列表.size()):
-					if 列表[i].is_ancestor_of(焦点):
-						插入索引 = i + 1; break
-	
-	参数容器.add_child(行)
-	if 插入索引 != -1: 参数容器.move_child(行, 插入索引)
-	
-	_注入通用样式(行); 更新预览()
-	# 添加后如果非正在加载状态，则自动让新 Key 获得焦点，方便连续输入
-	if not _正在加载UI:
-		get_tree().process_frame.connect(func():
-			if is_instance_valid(键输入): 键输入.grab_focus()
-		, CONNECT_ONE_SHOT)
+	_参数编辑管理器.创建参数行(键, 备注, 当前值)
 
 func _树项被选中():
 	var 选中 = _获取所有选中项()
@@ -676,87 +687,15 @@ func _加载预设详情(数据:Dictionary):
 	var 启动目录值 = _清洗文本(数据.get("启动目录", ""))
 	# 启动目录输入框保持空值，默认执行目录通过 placeholder 告知用户
 	启动目录输入.text = 启动目录值
-	启动目录输入.placeholder_text = _获取真实执行目录()
+	启动目录输入.placeholder_text = _命令执行管理器.获取真实执行目录()
 	前缀命令输入.text = 数据.get("前缀命令", ""); 核心命令输入.text = 数据["固定命令"]; Shell选择.selected = 数据.get("Shell类型", 0)
 	UTF8模式.button_pressed = 数据.get("UTF8模式", false)
 	for 子 in 参数容器.get_children(): 子.queue_free()
 	for 项 in 数据.get("参数列表", []): 创建参数行(项["键"], 项["备注"], 项.get("当前值", ""))
 	更新预览()
 
-# 真实执行目录（用于默认启动目录）
-func _获取真实执行目录() -> String:
-	var 目录 = ""
-	# 导出版下优先使用配置管理器初始化后的基础目录，避免 res:// 在打包环境中返回空字符串
-	if has_node("/root/配置管理器") and 配置管理器.基础目录 != "":
-		目录 = 配置管理器.基础目录
-	else:
-		目录 = ProjectSettings.globalize_path("res://")
-		if 目录 == "":
-			目录 = OS.get_executable_path().get_base_dir()
-	目录 = 目录.replace("/", "\\")
-	if 目录.ends_with("\\"): 目录 = 目录.left(-1)
-	return 目录
-
 func _智能解析并覆盖参数(文本:String):
-	if _正在加载UI: return
-	var 原始文本 = 文本.strip_edges()
-	if 原始文本 == "": return
-	
-	# 1. 预处理：规范化续行符（Windows ^ 和 Linux \）
-	# 将 " ^\n" 或 " \\\n" 替换为空格，合并为单行处理
-	var 规范文本 = 原始文本
-	var 续行正则 = RegEx.new()
-	续行正则.compile("\\s*[\\^\\\\]\\s*\\n")
-	规范文本 = 续行正则.sub(规范文本, " ", true)
-	规范文本 = 规范文本.replace("\r", " ").replace("\n", " ") # 彻底抹平换行
-	
-	# 2. 正则拆分：识别引号路径、普通单词
-	var regex = RegEx.new()
-	regex.compile("(\"[^\"]*\"|'[^']*'|[^\\s]+)")
-	var matches = regex.search_all(规范文本)
-	if matches.size() <= 1: return
-	
-	var raw_parts = []
-	for m in matches:
-		var p = m.get_string().strip_edges()
-		if p != "" and p != "^" and p != "\\": # 过滤无意义的孤立续行符
-			raw_parts.append(p)
-	
-	# 3. 智能聚合：识别 -flag value 结构并合并为一行参数
-	var merged_parts = []
-	var i = 0
-	while i < raw_parts.size():
-		var p = raw_parts[i]
-		# 如果是以 - 开头的标志位，且后面跟着一个普通值（不是标志位也不是括号），则合并
-		if p.begins_with("-") and i + 1 < raw_parts.size():
-			var next_p = raw_parts[i + 1]
-			if not next_p.begins_with("-") and not next_p in ["(", ")", "{", "}"]:
-				p += " " + next_p
-				i += 1
-		merged_parts.append(p)
-		i += 1
-	
-	if merged_parts.size() <= 0: return
-
-	# 4. 应用到 UI
-	_正在加载UI = true
-	# 第一个是核心命令
-	核心命令输入.text = merged_parts[0]
-	
-	# 自动重命名判断
-	var 当前名 = 预设名输入.text.strip_edges()
-	var 默认正则 = RegEx.new(); 默认正则.compile("^新模板(\\s*\\(副本\\))*$")
-	if 当前名 == "" or 默认正则.search(当前名) or 当前名 == "新分类":
-		预设名输入.text = _清洗文本(原始文本)
-	
-	# 清空并重新填充参数列表
-	for 子 in 参数容器.get_children(): 子.queue_free()
-	for k in range(1, merged_parts.size()):
-		创建参数行("", "", merged_parts[k])
-	
-	_正在加载UI = false
-	_自动保存当前预设()
-	更新预览()
+	_参数编辑管理器.智能解析并覆盖参数(文本)
 
 func _同步状态到UI():
 	# 从配置管理器加载新 Profile 的数据到 UI
@@ -769,12 +708,6 @@ func _同步状态到UI():
 	搜索框.text = 配置管理器.全局配置.get("搜索保留", "")
 	if 搜夹连带子项勾选:
 		搜夹连带子项勾选.button_pressed = 配置管理器.全局配置.get("搜夹连带子项", true)
-
-func _加载折叠到内存():
-	_树渲染搜索管理器.加载折叠到内存()
-
-func _保存折叠到全局():
-	_树渲染搜索管理器.保存折叠到全局()
 
 func 刷新树状菜单(记录折叠: bool = true):
 	_树渲染搜索管理器.刷新树状菜单(当前选中ID, 记录折叠)
@@ -789,42 +722,40 @@ func 填充树递归(pid: String, parent_item: TreeItem):
 	_树渲染搜索管理器.填充树递归(pid, parent_item)
 
 func _获取用于渲染的子节点(父ID: String) -> Array:
-	if !_拖拽预览已启用:
-		return 配置管理器.获取子节点(父ID)
-	var 子节点列表: Array = []
-	for 节点ID in 配置管理器.树状数据.keys():
-		var 数据 = 配置管理器.树状数据.get(节点ID)
-		if !(数据 is Dictionary):
-			continue
-		var 显示父ID = str(_拖拽预览父节点覆盖.get(节点ID, 数据.get("父节点", "")))
-		if 显示父ID != 父ID:
-			continue
-		var 项 = 数据.duplicate()
-		项["ID"] = 节点ID
-		子节点列表.append(项)
-	
-	var 排序序列 = _拖拽预览排序覆盖.get(父ID, [])
-	if 排序序列 is Array and !排序序列.is_empty():
-		var 序号表: Dictionary = {}
-		for i in range(排序序列.size()):
-			序号表[str(排序序列[i])] = i
-		子节点列表.sort_custom(func(a, b):
-			var aID = str(a.get("ID", ""))
-			var bID = str(b.get("ID", ""))
-			var a序 = int(序号表.get(aID, 2147483647))
-			var b序 = int(序号表.get(bID, 2147483647))
-			if a序 == b序:
-				return a.get("order", 0) < b.get("order", 0)
-			return a序 < b序
-		)
-	else:
-		子节点列表.sort_custom(func(a, b): return a.get("order", 0) < b.get("order", 0))
-	return 子节点列表
+	return _树拖拽管理器.获取用于渲染的子节点(父ID)
 
 func _搜索框内容改变(新文本:String):
 	_树渲染搜索管理器.搜索框内容改变(新文本, 当前选中ID)
 
+func _计划保存当前预设():
+	if _正在加载UI or 当前选中ID == "":
+		return
+	_待保存预设 = true
+	_计划延迟保存()
+
+func _计划保存当前文件夹():
+	if _正在加载UI or 当前选中ID == "":
+		return
+	_待保存文件夹 = true
+	_计划延迟保存()
+
+func _计划延迟保存():
+	if _是否已计划延迟保存:
+		return
+	_是否已计划延迟保存 = true
+	get_tree().create_timer(0.12).timeout.connect(_执行延迟保存, CONNECT_ONE_SHOT)
+
+func _执行延迟保存():
+	_是否已计划延迟保存 = false
+	if _待保存预设:
+		_待保存预设 = false
+		_自动保存当前预设()
+	if _待保存文件夹:
+		_待保存文件夹 = false
+		_自动保存当前文件夹()
+
 func _自动保存当前预设():
+	_待保存预设 = false
 	if _正在加载UI or 当前选中ID == "": return
 	var 数据 = 配置管理器.树状数据.get(当前选中ID); if !数据 or 数据["类型"] != "预设": return
 	数据["名称"] = 预设名输入.text; 数据["描述"] = 预设说明输入.text; 数据["启动目录"] = 启动目录输入.text; 数据["前缀命令"] = 前缀命令输入.text; 数据["固定命令"] = 核心命令输入.text; 数据["Shell类型"] = Shell选择.selected
@@ -838,6 +769,7 @@ func _自动保存当前预设():
 	_动态更新当前搜索()
 
 func _自动保存当前文件夹():
+	_待保存文件夹 = false
 	if _正在加载UI or 当前选中ID == "": return
 	var 数据 = 配置管理器.树状数据.get(当前选中ID); if !数据 or 数据["类型"] != "文件夹": return
 	数据["名称"] = 文件夹标题.text; 数据["描述"] = 文件夹描述.text; 配置管理器.保存预设()
@@ -846,719 +778,44 @@ func _自动保存当前文件夹():
 	_动态更新当前搜索()
 
 func _get_drag_data_logic(_pos):
-	var selected = _获取所有选中项(); if selected.is_empty(): return null
-	var preview = Label.new(); preview.text = " ?? 多选移动中(" + str(selected.size()) + ")" if selected.size() > 1 else " ?? " + selected[0].get_text(0)
-	var 拖拽ID集: Array = []
-	for 项 in selected:
-		if !(项 is TreeItem): continue
-		var 节点ID = str(项.get_metadata(0))
-		if 节点ID != "":
-			拖拽ID集.append(节点ID)
-	_清理拖拽落点标识()
-	_拖拽最后有效落点.clear()
-	_拖拽最后签名 = ""
-	_是否正在拖拽 = true
-	_拖拽起始父ID = ""
-	if !拖拽ID集.is_empty():
-		_拖拽起始父ID = str(配置管理器.树状数据.get(str(拖拽ID集[0]), {}).get("父节点", ""))
-	树状菜单.set_drag_preview(preview)
-	return {"拖拽ID集": 拖拽ID集}
+	return _树拖拽管理器.get_drag_data_logic(_pos)
 
 func _can_drop_data_logic(鼠标位置, 拖拽数据):
-	var 拖拽签名 = _生成拖拽签名(拖拽数据)
-	var 落点信息 = _计算拖拽落点(鼠标位置, 拖拽数据)
-	if 落点信息.get("是否有效", false):
-		_更新拖拽落点标识(落点信息)
-		_拖拽最后有效落点 = 落点信息.duplicate(true)
-		_拖拽最后签名 = 拖拽签名
-		_应用拖拽实时预览(落点信息, 拖拽数据, 鼠标位置)
-		return true
-	
-	# 实时重排后，鼠标可能短暂压在“已移动的自身条目”上，导致当前帧无效。
-	# 这里保留上一帧有效落点，避免同级下方拖拽被瞬间打断。
-	if _拖拽最后签名 == 拖拽签名 and _拖拽最后有效落点.get("是否有效", false):
-		_更新拖拽落点标识(_拖拽最后有效落点)
-		return true
-	else:
-		_更新拖拽落点标识(落点信息)
-		_拖拽最后有效落点.clear()
-		_拖拽最后签名 = ""
-		_清理拖拽实时预览()
-	return false
+	return _树拖拽管理器.can_drop_data_logic(鼠标位置, 拖拽数据)
 
 func _drop_data_logic(鼠标位置, 拖拽项):
-	var 拖拽签名 = _生成拖拽签名(拖拽项)
-	var 落点信息 = {}
-	if _拖拽最后签名 == 拖拽签名 and _拖拽最后有效落点.get("是否有效", false):
-		落点信息 = _拖拽最后有效落点.duplicate(true)
-	else:
-		落点信息 = _计算拖拽落点(鼠标位置, 拖拽项)
-	_拖拽最后有效落点.clear()
-	_拖拽最后签名 = ""
-	_清理拖拽落点标识()
-	_清理拖拽实时预览(false)
-	if !落点信息.get("是否有效", false):
-		刷新树状菜单(false)
-		return
-	
-	var 新父ID = 落点信息.get("新父ID", "")
-	var 插入索引 = _计算真实插入索引(新父ID, str(落点信息.get("目标ID", "")), int(落点信息.get("落点段", 0)), bool(落点信息.get("是否子级落点", false)))
-	if 插入索引 < 0:
-		刷新树状菜单(false)
-		return
-	var 目标ID = 落点信息.get("目标ID", "")
-	var 移动项ID集 = _提取可移动项ID集(拖拽项, 目标ID, 新父ID)
-	if 移动项ID集.is_empty(): return
-	var 原父节点表: Dictionary = {}
-	for 节点ID in 移动项ID集:
-		原父节点表[节点ID] = str(配置管理器.树状数据.get(节点ID, {}).get("父节点", ""))
-
-	for 节点ID in 移动项ID集:
-		配置管理器.树状数据[节点ID]["父节点"] = 新父ID
-	
-	# 同步所有兄弟的排序权重
-	var 原兄弟们 = 配置管理器.获取子节点(新父ID)
-	var 原兄弟ID序列: Array = []
-	for b in 原兄弟们:
-		原兄弟ID序列.append(b["ID"])
-	var 新序列 = []
-	for 兄弟ID in 原兄弟ID序列:
-		if 兄弟ID not in 移动项ID集: 新序列.append(兄弟ID)
-	
-	var 最终插入索引 = 插入索引
-	if 最终插入索引 == -1:
-		最终插入索引 = 新序列.size()
-	else:
-		# 同父节点拖拽时先剔除移动项会导致索引左移，这里按剔除数量修正并钳制，避免越界
-		var 前置被剔除数量 = 0
-		var 扫描上限 = mini(插入索引, 原兄弟ID序列.size())
-		for i in range(扫描上限):
-			var 候选ID = 原兄弟ID序列[i]
-			if 候选ID in 移动项ID集 and str(原父节点表.get(候选ID, "")) == 新父ID:
-				前置被剔除数量 += 1
-		最终插入索引 -= 前置被剔除数量
-		最终插入索引 = maxi(0, mini(最终插入索引, 新序列.size()))
-	
-	for j in range(移动项ID集.size()):
-		新序列.insert(最终插入索引 + j, 移动项ID集[j])
-			
-	配置管理器.更新排序(新序列)
-	刷新树状菜单()
-	# 恢复焦点与选中
-	树状菜单.grab_focus()
-	if 移动项ID集.size() > 0:
-		_递归选中树项(树状菜单.get_root(), 移动项ID集[0])
+	_树拖拽管理器.drop_data_logic(鼠标位置, 拖拽项)
 
 func _初始化拖拽落点标识():
-	if is_instance_valid(_拖拽上侧横线): return
-	
-	_拖拽上侧横线 = ColorRect.new()
-	_拖拽上侧横线.name = "拖拽上侧横线"
-	_拖拽上侧横线.color = Color(0.20, 0.82, 1.0, 0.95)
-	_拖拽上侧横线.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_拖拽上侧横线.visible = false
-	树状菜单.add_child(_拖拽上侧横线)
-	
-	_拖拽下侧横线 = ColorRect.new()
-	_拖拽下侧横线.name = "拖拽下侧横线"
-	_拖拽下侧横线.color = Color(0.20, 0.82, 1.0, 0.95)
-	_拖拽下侧横线.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_拖拽下侧横线.visible = false
-	树状菜单.add_child(_拖拽下侧横线)
-	
-	_拖拽子级高亮 = ColorRect.new()
-	_拖拽子级高亮.name = "拖拽子级高亮"
-	_拖拽子级高亮.color = Color(0.20, 0.82, 1.0, 0.18)
-	_拖拽子级高亮.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_拖拽子级高亮.visible = false
-	树状菜单.add_child(_拖拽子级高亮)
-	
-	_拖拽占位块 = ColorRect.new()
-	_拖拽占位块.name = "拖拽占位块"
-	_拖拽占位块.color = Color(0.20, 0.82, 1.0, 0.14)
-	_拖拽占位块.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_拖拽占位块.visible = false
-	树状菜单.add_child(_拖拽占位块)
+	_树拖拽管理器.初始化拖拽落点标识()
 
 func _更新拖拽落点标识(落点信息: Dictionary):
-	if !is_instance_valid(_拖拽上侧横线): return
-	_清理拖拽落点标识()
-	if !落点信息.get("是否有效", false): return
-	var 目标项 = 落点信息.get("目标项", null)
-	if 目标项 == null: return
-	var 落点段 = 落点信息.get("落点段", 0)
-	var 是否子级落点 = 落点信息.get("是否子级落点", false)
-	var 可视锚点项 = _获取拖拽可视锚点项(目标项, 落点段, 是否子级落点)
-	if 可视锚点项 == null: return
-	
-	var 行区域 = 树状菜单.get_item_area_rect(可视锚点项, 0)
-	if 行区域.size.y <= 0.0: return
-	
-	var 横线左侧 = 6.0
-	var 横线宽度 = max(树状菜单.size.x - 12.0, 4.0)
-	var 横线厚度 = 2.0
-	var 移动可视行数 = maxi(1, int(落点信息.get("移动可视行数", 1)))
-	var 占位高度 = 行区域.size.y * 移动可视行数
-	
-	if 是否子级落点:
-		_更新拖拽标识动画(_拖拽子级高亮, Vector2(2.0, 行区域.position.y), Vector2(max(树状菜单.size.x - 4.0, 4.0), 行区域.size.y))
-		_更新拖拽标识动画(_拖拽占位块, Vector2(2.0, 行区域.position.y + 行区域.size.y), Vector2(max(树状菜单.size.x - 4.0, 4.0), 占位高度))
-		_更新拖拽标识动画(_拖拽下侧横线, Vector2(横线左侧, 行区域.position.y + 行区域.size.y - 横线厚度), Vector2(横线宽度, 横线厚度))
-		return
-	
-	if 落点段 <= 0:
-		_更新拖拽标识动画(_拖拽上侧横线, Vector2(横线左侧, 行区域.position.y), Vector2(横线宽度, 横线厚度))
-		_更新拖拽标识动画(_拖拽占位块, Vector2(2.0, 行区域.position.y), Vector2(max(树状菜单.size.x - 4.0, 4.0), 占位高度))
-	else:
-		_更新拖拽标识动画(_拖拽下侧横线, Vector2(横线左侧, 行区域.position.y + 行区域.size.y - 横线厚度), Vector2(横线宽度, 横线厚度))
-		_更新拖拽标识动画(_拖拽占位块, Vector2(2.0, 行区域.position.y + 行区域.size.y), Vector2(max(树状菜单.size.x - 4.0, 4.0), 占位高度))
+	_树拖拽管理器.更新拖拽落点标识(落点信息)
 
-func _获取拖拽可视锚点项(目标项: TreeItem, 落点段: int, 是否子级落点: bool) -> TreeItem:
-	if 是否子级落点 or 落点段 <= 0:
-		return 目标项
-	var 目标ID = str(目标项.get_metadata(0))
-	var 目标数据 = 配置管理器.树状数据.get(目标ID)
-	if !目标数据 or 目标数据.get("类型", "") != "文件夹":
-		return 目标项
-	return _获取最后可见子孙项(目标项)
-
-func _获取最后可见子孙项(根项: TreeItem) -> TreeItem:
-	var 当前项 = 根项
-	while 当前项 and !当前项.is_collapsed():
-		var 子项 = 当前项.get_first_child()
-		var 最后可见子项: TreeItem = null
-		while 子项:
-			if 子项.visible:
-				最后可见子项 = 子项
-			子项 = 子项.get_next()
-		if 最后可见子项 == null:
-			break
-		当前项 = 最后可见子项
-	return 当前项
-
-func _清理拖拽落点标识():
-	_停止拖拽标识动画()
-	if is_instance_valid(_拖拽上侧横线): _拖拽上侧横线.visible = false
-	if is_instance_valid(_拖拽下侧横线): _拖拽下侧横线.visible = false
-	if is_instance_valid(_拖拽子级高亮): _拖拽子级高亮.visible = false
-	if is_instance_valid(_拖拽占位块): _拖拽占位块.visible = false
-
-func _更新拖拽标识动画(标识节点: Control, 目标位置: Vector2, 目标尺寸: Vector2):
-	if !is_instance_valid(标识节点):
-		return
-	标识节点.visible = true
-	标识节点.modulate = Color(1, 1, 1, 1)
-	标识节点.position = 目标位置
-	标识节点.size = 目标尺寸
-
-func _停止拖拽标识动画():
-	for 动画键 in _拖拽标识动画表.keys():
-		var 动画对象 = _拖拽标识动画表.get(动画键, null)
-		if 动画对象 is Tween:
-			(动画对象 as Tween).kill()
-	_拖拽标识动画表.clear()
-
-func _提取可移动项ID集(拖拽数据, 目标ID: String, 新父ID: String) -> Array:
-	var 结果: Array = []
-	var 拖拽ID集 = _提取拖拽ID集(拖拽数据)
-	for 节点ID in 拖拽ID集:
-		if 节点ID == "" or 节点ID == 目标ID: continue
-		if !配置管理器.树状数据.has(节点ID): continue
-		if 配置管理器.树状数据[节点ID]["类型"] == "文件夹" and _检查是否为子孙(节点ID, 新父ID): continue
-		结果.append(节点ID)
-	return 结果
-
-func _提取拖拽ID集(拖拽数据) -> Array:
-	var 结果: Array = []
-	if 拖拽数据 is Dictionary:
-		for 值 in 拖拽数据.get("拖拽ID集", []):
-			var 节点ID = str(值)
-			if 节点ID != "":
-				结果.append(节点ID)
-	elif 拖拽数据 is Array:
-		for 项 in 拖拽数据:
-			if !(项 is TreeItem): continue
-			var 节点ID = str(项.get_metadata(0))
-			if 节点ID != "":
-				结果.append(节点ID)
-	return 结果
-
-func _生成拖拽签名(拖拽数据) -> String:
-	var 拖拽ID集 = _提取拖拽ID集(拖拽数据)
-	if 拖拽ID集.is_empty():
-		return ""
-	var 签名数组 = PackedStringArray()
-	for 节点ID in 拖拽ID集:
-		签名数组.append(str(节点ID))
-	签名数组.sort()
-	return ",".join(签名数组)
-
-func _计算落点段(目标项: TreeItem, 鼠标位置, 是否目标文件夹: bool) -> int:
-	var 行区域 = 树状菜单.get_item_area_rect(目标项, 0)
-	if 行区域.size.y <= 0.0:
-		return 0
-	var 相对Y = clampf(鼠标位置.y - 行区域.position.y, 0.0, 行区域.size.y)
-	var 比例 = 相对Y / 行区域.size.y
-	if 是否目标文件夹:
-		# 缩小“子级落点”死区：中间 20% 为子级，其余优先同级上下
-		if 比例 < 0.40:
-			return -1
-		if 比例 > 0.60:
-			return 1
-		return 0
-	return -1 if 比例 < 0.5 else 1
-
-func _获取树最后可见项() -> TreeItem:
-	var 根项 = 树状菜单.get_root()
-	if 根项 == null:
-		return null
-	var 当前项 = 根项.get_first_child()
-	if 当前项 == null:
-		return null
-	var 最后可见项: TreeItem = null
-	while 当前项:
-		if 当前项.visible:
-			最后可见项 = 当前项
-		当前项 = 当前项.get_next()
-	if 最后可见项 == null:
-		return null
-	return _获取最后可见子孙项(最后可见项)
-
-func _是否命中树底末尾区(鼠标位置, 最后可见项: TreeItem) -> bool:
-	if 最后可见项 == null:
-		return false
-	var 最后行区域 = 树状菜单.get_item_area_rect(最后可见项, 0)
-	if 最后行区域.size.y <= 0.0:
-		return false
-	return 鼠标位置.y >= (最后行区域.position.y + 最后行区域.size.y - 1.0)
-
-func _是否命中树底热区(鼠标位置) -> bool:
-	# 固定热区：拖拽进入树底部后，始终允许落到当前层级末尾，避免被子级吸附卡住。
-	var 热区高度 = 44.0
-	var 树高度 = maxf(树状菜单.size.y, 0.0)
-	if 树高度 <= 0.0:
-		return false
-	return 鼠标位置.y >= (树高度 - 热区高度)
-
-func _构建树底末尾同级落点(最后可见项: TreeItem, 拖拽数据) -> Dictionary:
-	var 默认结果 = {
-		"是否有效": false,
-		"目标项": null,
-		"目标ID": "",
-		"新父ID": "",
-		"插入索引": -1,
-		"落点段": 0,
-		"是否子级落点": false
-	}
-	if 最后可见项 == null:
-		return 默认结果
-	var 末尾目标ID = str(最后可见项.get_metadata(0))
-	var 末尾目标数据 = 配置管理器.树状数据.get(末尾目标ID, {})
-	if 末尾目标ID == "" or 末尾目标数据.is_empty():
-		return 默认结果
-	var 末尾新父ID = str(末尾目标数据.get("父节点", ""))
-	var 末尾插入索引 = _计算真实插入索引(末尾新父ID, 末尾目标ID, 1, false)
-	var 末尾可移动项ID集 = _提取可移动项ID集(拖拽数据, 末尾目标ID, 末尾新父ID)
-	if 末尾可移动项ID集.is_empty() or 末尾插入索引 < 0:
-		return 默认结果
-	return {
-		"是否有效": true,
-		"目标项": 最后可见项,
-		"目标ID": 末尾目标ID,
-		"新父ID": 末尾新父ID,
-		"插入索引": 末尾插入索引,
-		"落点段": 1,
-		"是否子级落点": false,
-		"移动可视行数": _统计拖拽可视行数(拖拽数据)
-	}
-
-func _构建指定父级末尾同级落点(目标父ID: String, 拖拽数据) -> Dictionary:
-	var 默认结果 = {
-		"是否有效": false,
-		"目标项": null,
-		"目标ID": "",
-		"新父ID": "",
-		"插入索引": -1,
-		"落点段": 0,
-		"是否子级落点": false
-	}
-	var 目标父标识 = str(目标父ID)
-	if 目标父标识 == "":
-		return 默认结果
-	var 同级列表 = 配置管理器.获取子节点(目标父标识)
-	if 同级列表.is_empty():
-		return 默认结果
-	var 末尾目标ID = str(同级列表[同级列表.size() - 1].get("ID", ""))
-	if 末尾目标ID == "":
-		return 默认结果
-	var 末尾目标项 = _根据ID寻找树项(树状菜单.get_root(), 末尾目标ID)
-	if 末尾目标项 == null:
-		return 默认结果
-	var 末尾插入索引 = _计算真实插入索引(目标父标识, 末尾目标ID, 1, false)
-	var 可移动项ID集 = _提取可移动项ID集(拖拽数据, 末尾目标ID, 目标父标识)
-	if 可移动项ID集.is_empty() or 末尾插入索引 < 0:
-		return 默认结果
-	return {
-		"是否有效": true,
-		"目标项": 末尾目标项,
-		"目标ID": 末尾目标ID,
-		"新父ID": 目标父标识,
-		"插入索引": 末尾插入索引,
-		"落点段": 1,
-		"是否子级落点": false,
-		"移动可视行数": _统计拖拽可视行数(拖拽数据)
-	}
-
-func _计算拖拽落点(鼠标位置, 拖拽数据) -> Dictionary:
-	var 默认结果 = {
-		"是否有效": false,
-		"目标项": null,
-		"目标ID": "",
-		"新父ID": "",
-		"插入索引": -1,
-		"落点段": 0,
-		"是否子级落点": false
-	}
-	var 拖拽ID集 = _提取拖拽ID集(拖拽数据)
-	if 拖拽ID集.is_empty():
-		return 默认结果
-	var 最后可见项 = _获取树最后可见项()
-	if _是否命中树底热区(鼠标位置) or _是否命中树底末尾区(鼠标位置, 最后可见项):
-		var 起始父级末尾落点 = _构建指定父级末尾同级落点(_拖拽起始父ID, 拖拽数据)
-		if 起始父级末尾落点.get("是否有效", false):
-			return 起始父级末尾落点
-		return _构建树底末尾同级落点(最后可见项, 拖拽数据)
-	
-	var 目标项 = 树状菜单.get_item_at_position(鼠标位置)
-	if !目标项:
-		return 默认结果
-	
-	var 目标ID = str(目标项.get_metadata(0))
-	if 目标ID == "":
-		return 默认结果
-	var 目标数据 = 配置管理器.树状数据.get(目标ID)
-	if !目标数据:
-		return 默认结果
-	var 落点段 = _计算落点段(目标项, 鼠标位置, 目标数据.get("类型", "") == "文件夹")
-	
-	var 新父ID = ""
-	var 是否子级落点 = false
-	
-	if 落点段 == 0 and 目标数据["类型"] == "文件夹":
-		新父ID = 目标ID
-		是否子级落点 = true
-	else:
-		新父ID = 目标数据.get("父节点", "")
-	var 插入索引 = _计算真实插入索引(新父ID, 目标ID, 落点段, 是否子级落点)
-	
-	var 可移动项ID集 = _提取可移动项ID集(拖拽数据, 目标ID, 新父ID)
-	if 可移动项ID集.is_empty():
-		return 默认结果
-	
-	return {
-		"是否有效": 插入索引 >= 0,
-		"目标项": 目标项,
-		"目标ID": 目标ID,
-		"新父ID": 新父ID,
-		"插入索引": 插入索引,
-		"落点段": 落点段,
-		"是否子级落点": 是否子级落点,
-		"移动可视行数": _统计拖拽可视行数(拖拽数据)
-	}
-
-func _计算真实插入索引(新父ID: String, 目标ID: String, 落点段: int, 是否子级落点: bool) -> int:
-	if 是否子级落点:
-		return 0
-	var 兄弟们 = 配置管理器.获取子节点(新父ID)
-	for k in range(兄弟们.size()):
-		if str(兄弟们[k].get("ID", "")) == 目标ID:
-			return k if 落点段 <= 0 else k + 1
-	return -1
-
-func _应用拖拽实时预览(落点信息: Dictionary, 拖拽数据, 鼠标位置):
-	var 新父ID = 落点信息.get("新父ID", "")
-	var 插入索引 = 落点信息.get("插入索引", -1)
-	var 目标ID = 落点信息.get("目标ID", "")
-	var 移动项ID集 = _提取可移动项ID集(拖拽数据, 目标ID, 新父ID)
-	if 移动项ID集.is_empty():
-		_清理拖拽实时预览()
-		return
-	var 原父节点表: Dictionary = {}
-	for 节点ID in 移动项ID集:
-		原父节点表[节点ID] = str(配置管理器.树状数据.get(节点ID, {}).get("父节点", ""))
-	var 新签名 = 新父ID + "|" + str(插入索引) + "|" + ",".join(PackedStringArray(移动项ID集))
-	if _拖拽预览已启用 and _拖拽预览签名 == 新签名:
-		return
-	
-	_拖拽预览父节点覆盖.clear()
-	_拖拽预览排序覆盖.clear()
-	for 节点ID in 移动项ID集:
-		_拖拽预览父节点覆盖[节点ID] = 新父ID
-	
-	var 涉及父节点: Dictionary = {}
-	涉及父节点[新父ID] = true
-	for 原父ID in 原父节点表.values():
-		涉及父节点[str(原父ID)] = true
-	
-	for 父ID in 涉及父节点.keys():
-		var 原兄弟们 = 配置管理器.获取子节点(str(父ID))
-		var 原兄弟ID序列: Array = []
-		for 项 in 原兄弟们:
-			原兄弟ID序列.append(项["ID"])
-		var 新序列: Array = []
-		for 兄弟ID in 原兄弟ID序列:
-			if 兄弟ID not in 移动项ID集:
-				新序列.append(兄弟ID)
-		if str(父ID) == 新父ID:
-			var 最终插入索引 = 插入索引
-			if 最终插入索引 == -1:
-				最终插入索引 = 新序列.size()
-			else:
-				var 前置被剔除数量 = 0
-				var 扫描上限 = mini(插入索引, 原兄弟ID序列.size())
-				for i in range(扫描上限):
-					var 候选ID = 原兄弟ID序列[i]
-					if 候选ID in 移动项ID集 and str(原父节点表.get(候选ID, "")) == 新父ID:
-						前置被剔除数量 += 1
-				最终插入索引 -= 前置被剔除数量
-				最终插入索引 = maxi(0, mini(最终插入索引, 新序列.size()))
-			for j in range(移动项ID集.size()):
-				新序列.insert(最终插入索引 + j, 移动项ID集[j])
-		_拖拽预览排序覆盖[str(父ID)] = 新序列
-	
-	_拖拽预览已启用 = true
-	_拖拽预览签名 = 新签名
-	刷新树状菜单(false)
-	_清理拖拽落点标识()
-	var 新落点信息 = _计算拖拽落点(鼠标位置, 拖拽数据)
-	_更新拖拽落点标识(新落点信息)
-
-func _清理拖拽实时预览(是否刷新树: bool = true):
-	if !_拖拽预览已启用:
-		return
-	_拖拽预览已启用 = false
-	_拖拽预览签名 = ""
-	_拖拽预览父节点覆盖.clear()
-	_拖拽预览排序覆盖.clear()
-	if 是否刷新树:
-		刷新树状菜单(false)
-
-func _统计拖拽可视行数(拖拽数据) -> int:
-	var 拖拽ID集 = _提取拖拽ID集(拖拽数据)
-	if 拖拽ID集.is_empty():
-		return 1
-	var 根项列表: Array = []
-	var 选中ID表: Dictionary = {}
-	for 节点ID in 拖拽ID集:
-		选中ID表[节点ID] = true
-	for 节点ID in 拖拽ID集:
-		var 项 = _根据ID寻找树项(树状菜单.get_root(), 节点ID)
-		if 项 == null:
-			continue
-		if _树项祖先是否已选中(项, 选中ID表): continue
-		根项列表.append(项)
-	var 合计 = 0
-	for 根项 in 根项列表:
-		合计 += _统计可视子树行数(根项)
-	return maxi(合计, 1)
-
-func _根据ID寻找树项(当前项: TreeItem, 目标ID: String) -> TreeItem:
-	if 当前项 == null:
-		return null
-	if str(当前项.get_metadata(0)) == 目标ID:
-		return 当前项
-	var 子项 = 当前项.get_first_child()
-	while 子项:
-		var 命中项 = _根据ID寻找树项(子项, 目标ID)
-		if 命中项:
-			return 命中项
-		子项 = 子项.get_next()
-	return null
-
-func _树项祖先是否已选中(项: TreeItem, 选中ID表: Dictionary) -> bool:
-	var 父项 = 项.get_parent()
-	while 父项:
-		var 父ID = str(父项.get_metadata(0))
-		if 父ID != "" and 选中ID表.has(父ID):
-			return true
-		父项 = 父项.get_parent()
-	return false
-
-func _统计可视子树行数(根项: TreeItem) -> int:
-	if 根项 == null or !根项.visible:
-		return 0
-	var 合计 = 1
-	if 根项.is_collapsed():
-		return 合计
-	var 子项 = 根项.get_first_child()
-	while 子项:
-		合计 += _统计可视子树行数(子项)
-		子项 = 子项.get_next()
-	return 合计
 
 func _拖拽结束清理标识():
-	_是否正在拖拽 = false
-	_拖拽起始父ID = ""
-	_清理拖拽落点标识()
-	_清理拖拽实时预览()
-	_拖拽最后有效落点.clear()
-	_拖拽最后签名 = ""
-func _检查是否为子孙(祖先ID: String, 目标ID: String) -> bool:
-	if 目标ID == "": return false
-	if 祖先ID == 目标ID: return true
-	var cur = 目标ID
-	while cur != "":
-		var d = 配置管理器.树状数据.get(cur); if !d: break
-		var p = d.get("父节点", ""); if p == 祖先ID: return true
-		cur = p
-	return false
+	_树拖拽管理器.拖拽结束清理标识()
 
 func 更新预览():
-	var 焦点 = get_viewport().gui_get_focus_owner()
-	var 启动目录 = _清洗文本(启动目录输入.text)
-	var prefix_cmd = _清洗文本(前缀命令输入.text)
-	var base_cmd = _清洗文本(核心命令输入.text)
-	var final_bb = ""
-	var 目录_bb = ""
-	var 真实执行目录 = _获取真实执行目录()
-	var 显示执行目录 = 启动目录 if 启动目录 != "" else 真实执行目录
-	var 目录是否聚焦 = (焦点 == 启动目录输入)
-	if 目录是否聚焦:
-		目录_bb = "[color=#00ff88]" + 显示执行目录 + "[/color]"
-	else:
-		目录_bb = "[color=#aaaaaa]" + 显示执行目录 + "[/color]"
-	
-	# 前缀 (chcp 等) - 灰色显示
-	var 连接符 = " && " if (Shell选择.selected == 0 or Shell选择.selected == 2) else " ; "
-	if UTF8模式.button_pressed:
-		final_bb += "[color=#666666]chcp 65001 > nul" + 连接符 + "[/color]"
-	
-	# 前缀命令
-	if prefix_cmd != "":
-		var is_prefix_focused = (焦点 == 前缀命令输入)
-		if is_prefix_focused: final_bb += "[color=#00ff88]" + prefix_cmd + "[/color]"
-		else: final_bb += "[color=#aaaaaa]" + prefix_cmd + "[/color]"
-	
-	# 核心命令
-	var is_core_focused = (焦点 == 核心命令输入)
-	if is_core_focused: final_bb += "[color=#00ff88]" + base_cmd + "[/color]"
-	else: final_bb += "[color=#ffffff]" + base_cmd + "[/color]"
-	
-	for 行 in 参数容器.get_children():
-		if 行.is_queued_for_deletion(): continue
-		var 值 = 行.get_node("Value").text.strip_edges()
-		var 显示文本 = 值 if 值 != "" else "[" + 行.get_node("Key").text + "]"
-		var is_row_focused = (is_instance_valid(焦点) and 行.is_ancestor_of(焦点))
-		
-		final_bb += " "
-		if is_row_focused:
-			final_bb += "[color=#00ff88]" + 显示文本 + "[/color]"
-		else:
-			final_bb += "[color=#aaaaaa]" + 显示文本 + "[/color]"
-	
-	执行目录预览.text = 目录_bb
-	预览标签.text = final_bb
+	_命令执行管理器.更新预览()
 
 func _弹出参数右键菜单(目标行:HBoxContainer):
-	var menu = PopupMenu.new(); add_child(menu)
-	menu.add_item("复制 (Copy)", 200)
-	menu.add_item("粘贴 (Paste)", 201)
-	menu.add_separator()
-	menu.add_item("向下合并单行 (Merge Down)", 100)
-	menu.add_item("合并至焦点行 (范围合并) (Ctrl+G)", 104)
-	menu.add_item("将后续所有行合并至此 (Merge All Below)", 102)
-	menu.add_item("将所有参数合并入核心命令 (Merge All to Core)", 103)
-	menu.add_separator()
-	menu.add_item("在此处下方添加变量 (Ctrl+B)", 101)
-	
-	# 面向当前焦点的文字操作
-	var 焦点 = get_viewport().gui_get_focus_owner()
-	
-	menu.id_pressed.connect(func(id):
-		match id:
-			200: if 焦点 is TextEdit: 焦点.copy()
-			201: if 焦点 is TextEdit: 焦点.paste(); _自动保存当前预设(); 更新预览()
-			100: _合并参数行(目标行)
-			104: _合并范围参数行(目标行)
-			102: _批量合并参数行(目标行, true)
-			103: _全部参数合并入核心()
-			101: 目标行.get_node("Value").grab_focus(); 创建参数行("", "", "")
-		menu.queue_free()
-	)
-	menu.popup_on_parent(Rect2(get_viewport().get_mouse_position(), Vector2.ZERO))
+	_参数编辑管理器.弹出参数右键菜单(目标行)
 
 func _合并参数行(当前行:HBoxContainer):
-	var children = 参数容器.get_children()
-	var idx = children.find(当前行)
-	if idx != -1 and idx < children.size() - 1:
-		var 下一行 = children[idx + 1]
-		var 下一值 = 下一行.get_node("Value").text
-		当前行.get_node("Value").text += " " + 下一值
-		下一行.queue_free()
-		get_tree().process_frame.connect(func(): _自动保存当前预设(); 更新预览(), CONNECT_ONE_SHOT)
+	_参数编辑管理器.合并参数行(当前行)
 
 func _批量合并参数行(起始行:HBoxContainer, _仅后续: bool):
-	var children = 参数容器.get_children()
-	var idx = children.find(起始行)
-	if idx == -1: return
-	
-	var text_to_add = ""
-	for i in range(idx + 1, children.size()):
-		var line = children[i]
-		if line.is_queued_for_deletion(): continue
-		text_to_add += " " + line.get_node("Value").text
-		line.queue_free()
-	
-	起始行.get_node("Value").text += text_to_add
-	get_tree().process_frame.connect(func(): _自动保存当前预设(); 更新预览(), CONNECT_ONE_SHOT)
+	_参数编辑管理器.批量合并参数行(起始行, _仅后续)
 
 func _合并范围参数行(目标行:HBoxContainer):
-	var 焦点 = get_viewport().gui_get_focus_owner()
-	if !is_instance_valid(焦点): return
-	
-	var 列表 = 参数容器.get_children()
-	var 目标索引 = 列表.find(目标行)
-	var 焦点索引 = -1
-	
-	for i in range(列表.size()):
-		if 列表[i].is_ancestor_of(焦点):
-			焦点索引 = i; break
-	
-	if 焦点索引 == -1 or 焦点索引 == 目标索引:
-		_合并参数行(目标行) # 退化为单行合并
-		return
-	
-	var 起始 = min(焦点索引, 目标索引)
-	var 结束 = max(焦点索引, 目标索引)
-	var 头项 = 列表[起始]
-	var 拼接文本 = ""
-	
-	for k in range(起始 + 1, 结束 + 1):
-		var 项 = 列表[k]
-		if 项.is_queued_for_deletion(): continue
-		拼接文本 += " " + 项.get_node("Value").text
-		项.queue_free()
-	
-	头项.get_node("Value").text += 拼接文本
-	get_tree().process_frame.connect(func(): _自动保存当前预设(); 更新预览(), CONNECT_ONE_SHOT)
+	_参数编辑管理器.合并范围参数行(目标行)
 
 func _快捷范围合并():
-	var mpos = get_viewport().get_mouse_position()
-	var 目标行 = null
-	for line in 参数容器.get_children():
-		if is_instance_valid(line) and line.get_global_rect().has_point(mpos):
-			目标行 = line; break
-	if 目标行:_合并范围参数行(目标行)
+	_参数编辑管理器.快捷范围合并()
 
 func _全部参数合并入核心():
-	var text_to_add = ""
-	for line in 参数容器.get_children():
-		if line.is_queued_for_deletion(): continue
-		text_to_add += " " + line.get_node("Value").text
-		line.queue_free()
-	
-	核心命令输入.text += text_to_add
-	get_tree().process_frame.connect(func(): _自动保存当前预设(); 更新预览(), CONNECT_ONE_SHOT)
+	_参数编辑管理器.全部参数合并入核心()
 
 # --- 重构：信号命名方法 (消除 Lambda Freed 隐患) ---
 
@@ -1578,33 +835,6 @@ func _on_copy_on_execute_toggled(pressed: bool):
 	配置管理器.全局配置["执行时复制"] = pressed
 	配置管理器.保存全局配置()
 
-func _on_core_command_changed():
-	_自动保存当前预设(); 更新预览()
-
-func _on_executor_setting_changed(_i = 0):
-	_自动保存当前预设(); 更新预览()
-
-func _on_copy_command_pressed():
-	# 从富文本中提取纯文本
-	DisplayServer.clipboard_set(预览标签.get_parsed_text())
-	预览标签.select_all()
-
-func _复制预览选中或完整命令():
-	# 优先复制预览区选中文字（命令预览/执行目录），若无选中则回退到完整命令
-	var 焦点 = get_viewport().gui_get_focus_owner()
-	var 目录选中 = 执行目录预览.get_selected_text()
-	var 命令选中 = 预览标签.get_selected_text()
-	if 焦点 == 执行目录预览 and 目录选中 != "":
-		DisplayServer.clipboard_set(目录选中)
-	elif 焦点 == 预览标签 and 命令选中 != "":
-		DisplayServer.clipboard_set(命令选中)
-	elif 目录选中 != "":
-		DisplayServer.clipboard_set(目录选中)
-	elif 命令选中 != "":
-		DisplayServer.clipboard_set(命令选中)
-	else:
-		_on_copy_command_pressed()
-
 func _on_layout_dragged(offset):
 	配置管理器.全局配置["split_offset"] = offset
 	配置管理器.保存全局配置()
@@ -1615,262 +845,32 @@ func _on_panel_gui_input(e, p):
 		var node_focus = get_viewport().gui_get_focus_owner()
 		if is_instance_valid(node_focus): node_focus.release_focus()
 
-func _点击执行():
-	if 当前选中ID == "" or 预设面板.visible == false: return
-	_自动保存当前预设()
-	var 数据 = 配置管理器.树状数据[当前选中ID]
-	
-	var 启动目录 = _清洗文本(数据.get("启动目录", ""))
-	var prefix = _清洗文本(数据.get("前缀命令", ""))
-	var core_cmd = _清洗文本(数据.get("固定命令", ""))
-	
-	# 核心拼装
-	var 完整命令 = core_cmd
-	if prefix != "":
-		完整命令 = prefix + core_cmd
-	
-	# 拼装参数
-	for 行 in 参数容器.get_children():
-		if 行.is_queued_for_deletion(): continue
-		var value = 行.get_node("Value").text.strip_edges()
-		if value != "":
-			完整命令 += " " + value
-	
-	# 自动复制
-	if 执行时复制开关.button_pressed:
-		DisplayServer.clipboard_set(完整命令)
-	
-	_拉起窗口(Shell选择.selected, 完整命令, 数据.get("UTF8模式", false), 启动目录)
-
-func _拉起窗口(类型:int, 完整命令:String, 开启UTF8: bool = false, 启动目录:String = ""):
-	var 命令 = 完整命令
-	var 是PS = (类型 == 1 or 类型 == 3)
-	var 工作目录 = 启动目录
-	if 工作目录 == "":
-		工作目录 = _获取真实执行目录()
-	
-	# --- 添加命令回显提示 ---
-	var 基础路径 = ProjectSettings.globalize_path("res://").replace("/", "\\")
-	if 基础路径.ends_with("\\"): 基础路径 = 基础路径.left(-1)
-	var 显示目录 = 工作目录.replace("/", "\\")
-	if 显示目录.ends_with("\\"): 显示目录 = 显示目录.left(-1)
-	var CMD显示目录 = 显示目录.replace("^", "^^").replace("&", "^&").replace("|", "^|").replace(">", "^>").replace("<", "^<")
-	
-	if 是PS:
-		# PS 使用 Write-Host 提供颜色高亮，单引号内两单引号表示转义
-		var 安全串 = 完整命令.replace("'", "''")
-		var 提示 = "Write-Host '[ShellQuicker | PowerShell]' -ForegroundColor DarkCyan ; "
-		提示 += "Set-Location -LiteralPath '" + 工作目录.replace("'", "''") + "' ; "
-		提示 += "Write-Host 'PS " + 显示目录.replace("'", "''") + "> ' -NoNewline ; "
-		提示 += "Write-Host '" + 安全串 + "' -ForegroundColor White ; "
-		命令 = 提示 + 完整命令
-	else:
-		# CMD 使用 echo，转义管道和逻辑符防截断
-		var 安全串 = 完整命令.replace("&", "^&").replace("|", "^|").replace(">", "^>").replace("<", "^<")
-		var 安全目录 = 工作目录.replace("^", "^^").replace("&", "^&").replace("|", "^|").replace(">", "^>").replace("<", "^<")
-		var 提示 = "cd /d \"" + 安全目录 + "\" & echo [ShellQuicker ^| CMD] & echo " + CMD显示目录 + "^>" + 安全串 + " & "
-		命令 = 提示 + 完整命令
-	
-	if 开启UTF8:
-		if 是PS:
-			命令 = "chcp 65001 > $null ; " + 命令
-		else:
-			命令 = "chcp 65001 > nul && " + 命令
-	
-	match 类型:
-		0: OS.create_process("cmd", ["/c", "start", "cmd", "/k", 命令])
-		1: OS.create_process("cmd", ["/c", "start", "powershell", "-noexit", "-command", 命令])
-		2: 
-			# WT 需要对分号进行转义，否则会被误认为 WT 自身的分隔符
-			var wt_cmd = 命令.replace(";", "\\;")
-			OS.create_process("wt", ["-d", 工作目录, "cmd", "/k", wt_cmd])
-		3: 
-			var wt_cmd = 命令.replace(";", "\\;")
-			OS.create_process("wt", ["-d", 工作目录, "powershell", "-noexit", "-command", wt_cmd])
-
 func _树上运行图标被点击(项:TreeItem, _c, _i, _idx):
-	var node_id = 项.get_metadata(0); var 数据 = 配置管理器.树状数据.get(node_id)
-	if 数据 and 数据["类型"] == "预设":
-		if node_id == 当前选中ID:_自动保存当前预设()
-
-		var 启动目录 = _清洗文本(数据.get("启动目录", ""))
-		var prefix = _清洗文本(数据.get("前缀命令", ""))
-		var core_cmd = 数据.get("固定命令", "")
-
-		var 完整命令 = core_cmd
-		if prefix != "":
-			完整命令 = prefix + core_cmd
-
-		for p in 数据.get("参数列表", []):
-			var val = p.get("当前值", "").strip_edges()
-			if val != "":
-				完整命令 += " " + val
-
-		if 执行时复制开关.button_pressed:
-			DisplayServer.clipboard_set(完整命令)
-
-		_拉起窗口(数据.get("Shell类型", 0), 完整命令, 数据.get("UTF8模式", false), 启动目录)
+	_命令执行管理器.树上运行图标被点击(项)
 
 func _触发重命名(项:TreeItem):
-	if !项: return
-	正在重命名状态 = true
-	树状菜单.grab_focus()
-	项.set_editable(0, true)
-	树状菜单.edit_selected()
-	# Tree 内联编辑器创建可能晚于一帧，改为重试绑定避免漏连
-	_树重命名绑定尝试次数 = 0
-	_树重命名输入框 = null
-	get_tree().process_frame.connect(_绑定树重命名实时同步, CONNECT_ONE_SHOT)
-
-func _绑定树重命名实时同步():
-	if not 正在重命名状态: return
-	var 焦点 = get_viewport().gui_get_focus_owner()
-	if 焦点 is LineEdit and 树状菜单.is_ancestor_of(焦点):
-		_树重命名输入框 = 焦点
-		var 回调 = Callable(self, "_树重命名进行中")
-		if not _树重命名输入框.text_changed.is_connected(回调):
-			_树重命名输入框.text_changed.connect(回调)
-		_树重命名进行中(_树重命名输入框.text)
-		return
-
-	# 未取到 Tree 内联 LineEdit 时，继续尝试若干帧
-	_树重命名绑定尝试次数 += 1
-	if _树重命名绑定尝试次数 < 24:
-		get_tree().process_frame.connect(_绑定树重命名实时同步, CONNECT_ONE_SHOT)
-
-func _树重命名进行中(新名:String):
-	if not 正在重命名状态: return
-	var 项 = 树状菜单.get_selected()
-	if !项: return
-	var id = 项.get_metadata(0)
-	if id != 当前选中ID: return
-	if 预设面板.visible:
-		if 预设名输入.text != 新名: 预设名输入.text = 新名
-	elif 文件夹面板.visible:
-		if 文件夹标题.text != 新名: 文件夹标题.text = 新名
+	_树项操作管理器.触发重命名(项)
 
 func _树项编辑完成():
-	# 清理实时同步连接，避免悬挂连接
-	if is_instance_valid(_树重命名输入框):
-		var 回调 = Callable(self, "_树重命名进行中")
-		if _树重命名输入框.text_changed.is_connected(回调):
-			_树重命名输入框.text_changed.disconnect(回调)
-	_树重命名输入框 = null
-	_树重命名绑定尝试次数 = 0
-
-	正在重命名状态 = false; var 项 = 树状菜单.get_selected()
-	if 项:
-		var id = 项.get_metadata(0); var 新名 = 项.get_text(0)
-		配置管理器.重命名节点(id, 新名)
-		# 实时同步右侧详情页
-		if id == 当前选中ID:
-			if 预设面板.visible: 预设名输入.text = 新名
-			elif 文件夹面板.visible: 文件夹标题.text = 新名
-		项.set_editable(0, false)
-		_动态更新当前搜索()
+	_树项操作管理器.树项编辑完成()
 
 func _点击删除动作():
-	var 选中 = _获取所有选中项(); if 选中.is_empty(): return
-	for s in 选中: 配置管理器.删除节点(s.get_metadata(0))
-	刷新树状菜单(); 预设面板.hide(); 文件夹面板.hide()
+	_树项操作管理器.点击删除动作()
 
 func _点击克隆动作():
-	var 选中 = _获取所有选中项(); if 选中.size() != 1: return
-	var sid = 选中[0].get_metadata(0)
-	var 目标父ID = 配置管理器.树状数据[sid].get("父节点", "")
-	var nid = _递归深度克隆(sid, 目标父ID)
-	
-	# 智能定位到下方
-	var 兄弟们 = 配置管理器.获取子节点(目标父ID)
-	var 序列 = []
-	var 插入位置 = -1
-	for k in range(兄弟们.size()):
-		var id = 兄弟们[k]["ID"]
-		if id == nid: continue
-		序列.append(id)
-		if id == sid: 插入位置 = 序列.size() # 在 sid 之后插入
-	
-	if 插入位置 != -1: 序列.insert(插入位置, nid)
-	else : 序列.append(nid)
-	
-	配置管理器.更新排序(序列)
-	刷新树状菜单(); _递归选中树项(树状菜单.get_root(), nid)
-
-func _递归深度克隆(源ID: String, 新父ID: String) -> String:
-	var 源数据 = 配置管理器.树状数据[源ID]; var 新ID = str(Time.get_ticks_msec()) + "_" + str(randi() % 1000); var 新数据 = 源数据.duplicate(true); 新数据["父节点"] = 新父ID
-	if 新数据["名称"] == 源数据["名称"]: 新数据["名称"] += " (副本)"
-	配置管理器.树状数据[新ID] = 新数据
-	if 源数据["类型"] == "文件夹":
-		var keys = 配置管理器.树状数据.keys()
-		for k in keys:
-			if 配置管理器.树状数据.has(k) and 配置管理器.树状数据[k].get("父节点") == 源ID:_递归深度克隆(k, 新ID)
-	配置管理器.保存预设()
-	return 新ID
+	_树项操作管理器.点击克隆动作()
 
 func _更新右键菜单项状态():
-	var 选中 = _获取所有选中项()
-	右键菜单.set_item_disabled(0, 选中.size() > 1); 右键菜单.set_item_disabled(1, 选中.size() > 1)
-	右键菜单.set_item_disabled(3, 选中.size() > 1); 右键菜单.set_item_disabled(5, 选中.size() > 1)
+	_树项操作管理器.更新右键菜单项状态()
 
 func _右键菜单项被按下(id: int):
-	var 选中 = 树状菜单.get_selected()
-	var 目标父ID = ""
-	var 插入索引 = -1
-	
-	if 选中:
-		var 选中ID = 选中.get_metadata(0)
-		var 选中数据 = 配置管理器.树状数据.get(选中ID)
-		if 选中数据:
-			if 选中数据["类型"] == "文件夹":
-				目标父ID = 选中ID
-				插入索引 = 0 # 进入文件夹，放在第一个
-			else:
-				目标父ID = 选中数据.get("父节点", "")
-				var 兄弟们 = 配置管理器.获取子节点(目标父ID)
-				for k in range(兄弟们.size()):
-					if 兄弟们[k]["ID"] == 选中ID:
-						插入索引 = k + 1; break
-	
-	match id:
-		0, 1:
-			var nid = str(Time.get_ticks_msec())
-			var 数据 = {}
-			if id == 0:
-				数据 = {"名称": "新模板", "类型": "预设", "父节点": 目标父ID,"启动目录": "", "固定命令": "", "参数列表": [], "Shell类型": 0, "order": 999}
-			else:
-				数据 = {"名称": "新分类", "类型": "文件夹", "父节点": 目标父ID,"描述": "", "order": 999}
-			
-			配置管理器.添加节点(nid, 数据)
-			# 插入排序逻辑
-			var 兄弟们 = 配置管理器.获取子节点(目标父ID)
-			var 序列 = []
-			for b in 兄弟们:
-				if b["ID"] == nid: continue # 先排除自己
-				序列.append(b["ID"])
-			
-			if 插入索引 == -1: 序列.append(nid)
-			else : 序列.insert(插入索引, nid)
-			
-			配置管理器.更新排序(序列)
-			刷新树状菜单(); _递归选中树项(树状菜单.get_root(), nid)
-		3: _点击克隆动作()
-		5: if 选中:_触发重命名(选中)
-		4: _点击删除动作()
+	_树项操作管理器.右键菜单项被按下(id)
 
 func _获取所有选中项() -> Array:
-	var 结果 = []; var 项 = 树状菜单.get_next_selected(null)
-	while 项: 结果.append(项); 项 = 树状菜单.get_next_selected(项)
-	return 结果
+	return _树项操作管理器.获取所有选中项()
 
 func _递归选中树项(当前项:TreeItem, 目标ID: String) -> bool:
-	var 子 = 当前项.get_first_child()
-	while 子:
-		if 子.get_metadata(0) == 目标ID: 树状菜单.deselect_all(); 子.select(0); 树状菜单.scroll_to_item(子); _树项被选中(); return true
-		if _递归选中树项(子, 目标ID): return true
-		子 = 子.get_next()
-	return false
+	return _树项操作管理器.递归选中树项(当前项, 目标ID)
 
 func _递归同步排序(项:TreeItem):
-	var ids = []; var 子 = 项.get_first_child()
-	while 子:ids.append(子.get_metadata(0)); _递归同步排序(子); 子 = 子.get_next()
-	if ids.size() > 0: 配置管理器.更新排序(ids)
+	_树项操作管理器.递归同步排序(项)
