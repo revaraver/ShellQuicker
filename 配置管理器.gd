@@ -14,6 +14,7 @@ var 全局配置: Dictionary = {
 	"当前配置文件": "presets",
 	"split_offset": 350,
 	"允许多开": false,
+	"最小化唤出快捷键": "Ctrl+Shift+D",
 	"执行时复制": false,
 	"已折叠ID": []
 }
@@ -56,7 +57,7 @@ func 加载全局配置(指定别名: String = ""):
 	var config = ConfigFile.new()
 	if config.load(全局配置路径) == OK:
 		# 1. 加载全局通用设置
-		for key in ["当前配置文件", "字体大小", "允许多开", "split_offset"]:
+		for key in ["当前配置文件", "字体大小", "允许多开", "split_offset", "最小化唤出快捷键"]:
 			if 全局配置.has(key):
 				全局配置[key] = config.get_value("Settings", key, 全局配置[key])
 		
@@ -79,7 +80,7 @@ func 保存全局配置():
 	config.load(全局配置路径) # 必须先 load 以保留其他 Profile 的数据
 	
 	# 1. 写入全局通用 (确保当前配置文件名被写入)
-	for key in ["当前配置文件", "字体大小", "允许多开", "split_offset"]:
+	for key in ["当前配置文件", "字体大小", "允许多开", "split_offset", "最小化唤出快捷键"]:
 		config.set_value("Settings", key, 全局配置[key])
 	
 	# 2. 写入当前 Profile 专属
