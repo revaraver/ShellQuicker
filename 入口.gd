@@ -68,14 +68,7 @@ var _拖拽最后签名: String = ""
 var _是否正在拖拽: bool = false
 var _拖拽标识动画表: Dictionary = {}
 var _拖拽起始父ID: String = ""
-var 最小化唤出快捷键按钮: Button = null
-var _最小化唤出快捷键: InputEventKey = null
-var _快捷键设置弹窗: AcceptDialog = null
-var _快捷键采集输入框: LineEdit = null
-var _快捷键待应用: InputEventKey = null
-var _全局热键助手进程ID: int = -1
-var _全局热键助手脚本路径: String = ""
-var _全局热键助手日志路径: String = ""
+var _窗口快捷键控制器 = preload("res://窗口快捷键控制器.gd").new()
 
 func _ready():
 	# --- 窗口自适应初始大小 (屏幕的一半并居中) ---
@@ -219,7 +212,7 @@ func _初始化UI():
 	右键菜单.add_item("克隆副本 (Ctrl+D)", 3)
 	右键菜单.add_item("删除项目 (Delete)", 4)
 	
-	_初始化快捷键设置入口()
+	_初始化窗口快捷键控制器()
 	
 	_注入通用样式(self )
 
@@ -231,104 +224,15 @@ func _初始化文件夹备注输入框():
 	文件夹描述.custom_minimum_size = Vector2(0, 260)
 	文件夹描述.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
-func _初始化快捷键设置入口():
+func _初始化窗口快捷键控制器():
 	var 工具栏 = $布局容器 / 顶部导航 / MarginContainer / 工具栏
-	if not is_instance_valid(工具栏):
-		return
-	if is_instance_valid(最小化唤出快捷键按钮):
-		return
-	最小化唤出快捷键按钮 = Button.new()
-	最小化唤出快捷键按钮.name = "最小化唤出快捷键按钮"
-	最小化唤出快捷键按钮.focus_mode = Control.FOCUS_CLICK
-	最小化唤出快捷键按钮.tooltip_text = "设置最小化/唤出窗口快捷键"
-	最小化唤出快捷键按钮.pressed.connect(_打开最小化快捷键设置)
-	工具栏.add_child(最小化唤出快捷键按钮)
-	_更新最小化唤出快捷键按钮文本()
-
-func _加载最小化唤出快捷键():
-	var 快捷键文本 = str(配置管理器.全局配置.get("最小化唤出快捷键", "Ctrl+Shift+D"))
-	var 解析结果 = _快捷键文本转对象(快捷键文本)
-	if 解析结果 == null:
-		解析结果 = _快捷键文本转对象("Ctrl+Shift+D")
-		配置管理器.全局配置["最小化唤出快捷键"] = "Ctrl+Shift+D"
-		配置管理器.保存全局配置()
-	_最小化唤出快捷键 = 解析结果
-	_更新最小化唤出快捷键按钮文本()
-	_重启全局热键助手()
-
-func _更新最小化唤出快捷键按钮文本():
-	if not is_instance_valid(最小化唤出快捷键按钮):
-		return
-	var 显示文本 = _快捷键对象转文本(_最小化唤出快捷键)
-	if 显示文本 == "":
-		显示文本 = "Ctrl+Shift+D"
-	最小化唤出快捷键按钮.text = "窗口快捷键: " + 显示文本
-
-func _快捷键文本转对象(文本: String) -> InputEventKey:
-	var 原文 = 文本.strip_edges()
-	if 原文 == "":
-		return null
-	var 片段 = 原文.split("+", false)
-	var 是否Ctrl = false
-	var 是否Shift = false
-	var 是否Alt = false
-	var 是否Meta = false
-	var 主键文本 = ""
-	for 片段文本 in 片段:
-		var 规范 = 片段文本.strip_edges().to_lower()
-		match 规范:
-			"ctrl", "control":
-				是否Ctrl = true
-			"shift":
-				是否Shift = true
-			"alt":
-				是否Alt = true
-			"meta", "win", "cmd":
-				是否Meta = true
-			_:
-				if 主键文本 == "":
-					主键文本 = 片段文本.strip_edges()
-	if 主键文本 == "":
-		return null
-	var 主键码 = OS.find_keycode_from_string(主键文本)
-	if 主键码 == KEY_NONE:
-		return null
-	if 主键码 == KEY_CTRL or 主键码 == KEY_SHIFT or 主键码 == KEY_ALT or 主键码 == KEY_META:
-		return null
-	var 快捷键 = InputEventKey.new()
-	快捷键.keycode = 主键码
-	快捷键.ctrl_pressed = 是否Ctrl
-	快捷键.shift_pressed = 是否Shift
-	快捷键.alt_pressed = 是否Alt
-	快捷键.meta_pressed = 是否Meta
-	return 快捷键
-
-func _快捷键对象转文本(快捷键: InputEventKey) -> String:
-	if 快捷键 == null:
-		return ""
-	var 片段: Array[String] = []
-	if 快捷键.ctrl_pressed:
-		片段.append("Ctrl")
-	if 快捷键.shift_pressed:
-		片段.append("Shift")
-	if 快捷键.alt_pressed:
-		片段.append("Alt")
-	if 快捷键.meta_pressed:
-		片段.append("Meta")
-	var 主键名 = OS.get_keycode_string(快捷键.keycode)
-	if 主键名 == "":
-		return ""
-	片段.append(主键名.to_upper())
-	return "+".join(片段)
-
-func _快捷键匹配(事件: InputEventKey, 快捷键: InputEventKey) -> bool:
-	if 事件 == null or 快捷键 == null:
-		return false
-	return 事件.keycode == 快捷键.keycode \
-		and 事件.ctrl_pressed == 快捷键.ctrl_pressed \
-		and 事件.shift_pressed == 快捷键.shift_pressed \
-		and 事件.alt_pressed == 快捷键.alt_pressed \
-		and 事件.meta_pressed == 快捷键.meta_pressed
+	_窗口快捷键控制器.初始化(
+		self,
+		工具栏,
+		配置管理器,
+		Callable(self, "_注入通用样式"),
+		Callable(self, "_切换窗口最小化唤出")
+	)
 
 func _切换窗口最小化唤出():
 	var 主窗口 = get_window()
@@ -340,342 +244,8 @@ func _切换窗口最小化唤出():
 	else:
 		主窗口.mode = Window.MODE_MINIMIZED
 
-func _打开最小化快捷键设置():
-	if is_instance_valid(_快捷键设置弹窗):
-		return
-	_快捷键待应用 = _最小化唤出快捷键
-	_快捷键设置弹窗 = AcceptDialog.new()
-	_快捷键设置弹窗.title = "设置窗口快捷键"
-	_快捷键设置弹窗.get_ok_button().text = "保存"
-	_快捷键设置弹窗.canceled.connect(_关闭最小化快捷键设置弹窗)
-	_快捷键设置弹窗.confirmed.connect(_确认最小化快捷键设置)
-	_快捷键设置弹窗.custom_action.connect(_快捷键设置弹窗自定义动作)
-	add_child(_快捷键设置弹窗)
-	
-	var 说明文本 = Label.new()
-	说明文本.text = "点击输入框后按下快捷键，默认 Ctrl+Shift+D"
-	_快捷键设置弹窗.add_child(说明文本)
-	
-	_快捷键采集输入框 = LineEdit.new()
-	_快捷键采集输入框.placeholder_text = "按下新的快捷键组合"
-	_快捷键采集输入框.text = _快捷键对象转文本(_快捷键待应用)
-	_快捷键采集输入框.gui_input.connect(_捕获最小化快捷键输入)
-	_快捷键设置弹窗.add_child(_快捷键采集输入框)
-	
-	_快捷键设置弹窗.add_button("恢复默认", true, "恢复默认")
-	_注入通用样式(_快捷键设置弹窗)
-	_快捷键设置弹窗.popup_centered(Vector2i(420, 150))
-	_快捷键采集输入框.grab_focus()
-
-func _捕获最小化快捷键输入(event: InputEvent):
-	if not (event is InputEventKey):
-		return
-	var 键盘事件 = event as InputEventKey
-	if not 键盘事件.pressed or 键盘事件.echo:
-		return
-	var 主键码 = 键盘事件.keycode
-	if 主键码 == KEY_NONE:
-		return
-	if 主键码 == KEY_CTRL or 主键码 == KEY_SHIFT or 主键码 == KEY_ALT or 主键码 == KEY_META:
-		get_viewport().set_input_as_handled()
-		return
-	var 新快捷键 = InputEventKey.new()
-	新快捷键.keycode = 主键码
-	新快捷键.ctrl_pressed = 键盘事件.ctrl_pressed
-	新快捷键.shift_pressed = 键盘事件.shift_pressed
-	新快捷键.alt_pressed = 键盘事件.alt_pressed
-	新快捷键.meta_pressed = 键盘事件.meta_pressed
-	_快捷键待应用 = 新快捷键
-	if is_instance_valid(_快捷键采集输入框):
-		_快捷键采集输入框.text = _快捷键对象转文本(_快捷键待应用)
-	get_viewport().set_input_as_handled()
-
-func _快捷键设置弹窗自定义动作(动作名: String):
-	if 动作名 != "恢复默认":
-		return
-	_快捷键待应用 = _快捷键文本转对象("Ctrl+Shift+D")
-	if is_instance_valid(_快捷键采集输入框):
-		_快捷键采集输入框.text = "Ctrl+Shift+D"
-
-func _确认最小化快捷键设置():
-	if _快捷键待应用 == null:
-		return
-	_最小化唤出快捷键 = _快捷键待应用
-	配置管理器.全局配置["最小化唤出快捷键"] = _快捷键对象转文本(_最小化唤出快捷键)
-	配置管理器.保存全局配置()
-	_更新最小化唤出快捷键按钮文本()
-	_重启全局热键助手()
-	_关闭最小化快捷键设置弹窗()
-
-func _关闭最小化快捷键设置弹窗():
-	if is_instance_valid(_快捷键设置弹窗):
-		_快捷键设置弹窗.queue_free()
-	_快捷键设置弹窗 = null
-	_快捷键采集输入框 = null
-	_快捷键待应用 = null
-
-func _重启全局热键助手():
-	_停止全局热键助手()
-	if OS.get_name() != "Windows":
-		return
-	if _最小化唤出快捷键 == null:
-		return
-	_确保全局热键助手脚本()
-	if _全局热键助手脚本路径 == "":
-		return
-	if _全局热键助手日志路径 != "":
-		var 日志文件 = FileAccess.open(_全局热键助手日志路径, FileAccess.WRITE)
-		if 日志文件:
-			日志文件.store_string("=== 全局热键助手启动 ===\n")
-			日志文件.store_string("主进程ID=" + str(OS.get_process_id()) + "\n")
-			日志文件.store_string("快捷键=" + _快捷键对象转文本(_最小化唤出快捷键) + "\n")
-			日志文件.close()
-	var 参数: PackedStringArray = [
-		"-NoProfile",
-		"-Sta",
-		"-ExecutionPolicy", "Bypass",
-		"-WindowStyle", "Hidden",
-		"-File", _全局热键助手脚本路径,
-		"-TargetProcessId", str(OS.get_process_id()),
-		"-Hotkey", _快捷键对象转文本(_最小化唤出快捷键),
-		"-LogPath", _全局热键助手日志路径
-	]
-	var 进程ID = OS.create_process("powershell.exe", 参数, false)
-	if 进程ID > 0:
-		_全局热键助手进程ID = 进程ID
-		if _全局热键助手日志路径 != "":
-			print("全局热键日志: " + _全局热键助手日志路径)
-	else:
-		_全局热键助手进程ID = -1
-		print("全局热键助手启动失败，已回退为窗口内快捷键。")
-
-func _停止全局热键助手():
-	if _全局热键助手进程ID <= 0:
-		return
-	OS.kill(_全局热键助手进程ID)
-	_全局热键助手进程ID = -1
-
-func _全局热键助手是否在线() -> bool:
-	if _全局热键助手进程ID <= 0:
-		return false
-	if OS.has_method("is_process_running") and not OS.is_process_running(_全局热键助手进程ID):
-		_全局热键助手进程ID = -1
-		return false
-	return true
-
-func _确保全局热键助手脚本():
-	var 基础目录 = 配置管理器.基础目录
-	if 基础目录 == "":
-		return
-	_全局热键助手脚本路径 = 基础目录.path_join("全局热键助手.ps1")
-	_全局热键助手日志路径 = 基础目录.path_join("全局热键助手.log")
-	var 文件 = FileAccess.open(_全局热键助手脚本路径, FileAccess.WRITE)
-	if 文件 == null:
-		_全局热键助手脚本路径 = ""
-		return
-	var 脚本文本 = _获取全局热键助手脚本文本()
-	var 带BOM缓冲 = PackedByteArray([0xEF, 0xBB, 0xBF])
-	带BOM缓冲.append_array(脚本文本.to_utf8_buffer())
-	文件.store_buffer(带BOM缓冲)
-	文件.close()
-
-func _获取全局热键助手脚本文本() -> String:
-	return """
-param(
-  [Parameter(Mandatory = $true)][int]$TargetProcessId,
-  [string]$Hotkey = 'Ctrl+Shift+D',
-  [string]$LogPath = ''
-)
-function Write-Log([string]$message) {
-  if ([string]::IsNullOrWhiteSpace($LogPath)) { return }
-  try {
-    $time = [DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss.fff')
-    Add-Content -LiteralPath $LogPath -Value "$time $message" -Encoding UTF8
-  } catch {}
-}
-try {
-  Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
-} catch {
-  Write-Log "程序集加载失败(System.Windows.Forms): $($_.Exception.Message)"
-  exit 4
-}
-$interopCode = @'
-using System;
-using System.IO;
-using System.Windows.Forms;
-using System.Runtime.InteropServices;
-public class HotkeyInteropWindow : Form {
-  [StructLayout(LayoutKind.Sequential)]
-  public struct Msg {
-    public IntPtr hwnd;
-    public uint message;
-    public IntPtr wParam;
-    public IntPtr lParam;
-    public uint time;
-    public int pt_x;
-    public int pt_y;
-  }
-  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-  [DllImport("user32.dll", SetLastError=true)]
-  public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-  [DllImport("user32.dll", SetLastError=true)]
-  public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
-  [DllImport("user32.dll")]
-  public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
-  [DllImport("user32.dll")]
-  public static extern bool SetForegroundWindow(IntPtr hWnd);
-  [DllImport("user32.dll")]
-  public static extern bool IsIconic(IntPtr hWnd);
-  [DllImport("user32.dll")]
-  public static extern bool IsWindowVisible(IntPtr hWnd);
-  [DllImport("user32.dll")]
-  public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-  [DllImport("user32.dll")]
-  public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-  public static IntPtr FindProcessWindow(int processId) {
-    IntPtr result = IntPtr.Zero;
-    EnumWindows(delegate (IntPtr hWnd, IntPtr lParam) {
-      uint pid;
-      GetWindowThreadProcessId(hWnd, out pid);
-      if (pid == (uint)processId && (IsWindowVisible(hWnd) || IsIconic(hWnd))) {
-        result = hWnd;
-        return false;
-      }
-      return true;
-    }, IntPtr.Zero);
-    return result;
-  }
-  public bool Registered = false;
-  private int _targetProcessId;
-  private uint _mods;
-  private uint _vk;
-  private string _logPath;
-  private Timer _timer;
-  public HotkeyInteropWindow(int targetProcessId, uint mods, uint vk, string logPath) {
-    _targetProcessId = targetProcessId;
-    _mods = mods;
-    _vk = vk;
-    _logPath = logPath ?? "";
-    ShowInTaskbar = false;
-    FormBorderStyle = FormBorderStyle.None;
-    WindowState = FormWindowState.Minimized;
-    Opacity = 0;
-    Width = 0;
-    Height = 0;
-    _timer = new Timer();
-    _timer.Interval = 250;
-    _timer.Tick += (s, e) => {
-      try {
-        var p = System.Diagnostics.Process.GetProcessById(_targetProcessId);
-      } catch {
-        WriteLog("目标进程已退出");
-        _timer.Stop();
-        Close();
-      }
-    };
-  }
-  protected override void OnHandleCreated(EventArgs e) {
-    base.OnHandleCreated(e);
-    Registered = RegisterHotKey(this.Handle, 1, _mods, _vk);
-    if (!Registered) {
-      WriteLog("RegisterHotKey失败 LastError=" + Marshal.GetLastWin32Error());
-      return;
-    }
-    WriteLog("RegisterHotKey成功 modifiers=" + _mods + " key=" + _vk);
-    _timer.Start();
-  }
-  protected override void OnFormClosed(FormClosedEventArgs e) {
-    if (Registered) {
-      UnregisterHotKey(this.Handle, 1);
-      WriteLog("注销热键并退出");
-    }
-    base.OnFormClosed(e);
-  }
-  protected override void WndProc(ref Message m) {
-    const int WM_HOTKEY = 0x0312;
-    if (m.Msg == WM_HOTKEY) {
-      WriteLog("收到WM_HOTKEY");
-      var hwnd = FindProcessWindow(_targetProcessId);
-      if (hwnd == IntPtr.Zero) {
-        WriteLog("未找到目标窗口句柄");
-      } else if (IsIconic(hwnd)) {
-        ShowWindowAsync(hwnd, 9);
-        SetForegroundWindow(hwnd);
-        WriteLog("执行恢复窗口 SW_RESTORE");
-      } else {
-        ShowWindowAsync(hwnd, 6);
-        WriteLog("执行最小化窗口 SW_MINIMIZE");
-      }
-    }
-    base.WndProc(ref m);
-  }
-  private void WriteLog(string message) {
-    if (string.IsNullOrWhiteSpace(_logPath)) return;
-    try {
-      File.AppendAllText(_logPath, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + " " + message + Environment.NewLine);
-    } catch {}
-  }
-}
-'@
-try {
-  Add-Type -TypeDefinition $interopCode -Language CSharp -ReferencedAssemblies @("System.Windows.Forms", "System.Drawing") -ErrorAction Stop | Out-Null
-  Write-Log "互操作类型编译成功"
-} catch {
-  Write-Log "互操作类型编译失败: $($_.Exception.Message)"
-  exit 5
-}
-function Parse-Hotkey([string]$text) {
-  $mods = 0
-  $vk = 0
-  foreach ($part in $text.Split('+')) {
-    $token = $part.Trim().ToLower()
-    switch ($token) {
-      'alt' { $mods = $mods -bor 0x0001; continue }
-      'ctrl' { $mods = $mods -bor 0x0002; continue }
-      'control' { $mods = $mods -bor 0x0002; continue }
-      'shift' { $mods = $mods -bor 0x0004; continue }
-      'meta' { $mods = $mods -bor 0x0008; continue }
-      'win' { $mods = $mods -bor 0x0008; continue }
-      'cmd' { $mods = $mods -bor 0x0008; continue }
-      default {
-        try {
-          $vk = [int][System.Enum]::Parse([System.Windows.Forms.Keys], $part.Trim(), $true)
-        } catch {
-          $vk = 0
-        }
-      }
-    }
-  }
-  if ($vk -eq 0) { $vk = [int][System.Windows.Forms.Keys]::D }
-  return @([uint32]$mods, [uint32]$vk)
-}
-Write-Log "助手启动 TargetProcessId=$TargetProcessId Hotkey=$Hotkey"
-$parsed = Parse-Hotkey $Hotkey
-Write-Log "热键解析 modifiers=$($parsed[0]) key=$($parsed[1])"
-try {
-  [System.Windows.Forms.Application]::EnableVisualStyles()
-  $window = New-Object HotkeyInteropWindow($TargetProcessId, [uint32]$parsed[0], [uint32]$parsed[1], $LogPath)
-  $window.Show()
-  $null = $window.Handle
-  Write-Log "助手窗口句柄已创建 Handle=$($window.Handle)"
-  for ($i = 0; $i -lt 20 -and -not $window.Registered; $i++) {
-    [System.Windows.Forms.Application]::DoEvents()
-    Start-Sleep -Milliseconds 50
-  }
-  if (-not $window.Registered) {
-    Write-Log "热键注册失败，助手退出"
-    exit 2
-  }
-  Write-Log "助手进入消息循环"
-  [System.Windows.Forms.Application]::Run($window)
-} catch {
-  Write-Log "助手异常: $($_.Exception.Message)"
-  exit 3
-}
-"""
-
 func _exit_tree():
-	_停止全局热键助手()
+	_窗口快捷键控制器.释放资源()
 
 func _调整字体大小(增量:int):
 	当前字体大小 = clamp(当前字体大小 + 增量, 12, 48)
@@ -805,86 +375,117 @@ func _清洗文本(文本:String) -> String:
 	return 规范文本.strip_edges()
 
 func _input(event):
-	# 点击空白区域失去焦点 (不包含滚动条和按钮点击)
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		var focus_owner = get_viewport().gui_get_focus_owner()
-		if focus_owner and not focus_owner.get_global_rect().has_point(event.global_position):
-			# 如果是名称输入框，点击空白时也要清洗
-			if focus_owner == 预设名输入 or focus_owner == 文件夹标题:
-				focus_owner.text = _清洗文本(focus_owner.text)
-			
-			get_tree().process_frame.connect(func():
-				var new_focus = get_viewport().gui_get_focus_owner()
-				if new_focus == null:
-					if is_instance_valid(focus_owner): focus_owner.release_focus()
-			, CONNECT_ONE_SHOT)
-
+	_处理点击空白区域失去焦点(event)
 	if event is InputEventKey and event.pressed:
-		var 已启用全局热键助手 = OS.get_name() == "Windows" and _全局热键助手是否在线()
-		if not 已启用全局热键助手 and not is_instance_valid(_快捷键设置弹窗) and _快捷键匹配(event, _最小化唤出快捷键):
-			_切换窗口最小化唤出()
+		_处理键盘输入(event)
+
+func _处理点击空白区域失去焦点(event: InputEvent):
+	# 点击空白区域失去焦点 (不包含滚动条和按钮点击)
+	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	var focus_owner = get_viewport().gui_get_focus_owner()
+	if focus_owner and not focus_owner.get_global_rect().has_point(event.global_position):
+		# 如果是名称输入框，点击空白时也要清洗
+		if focus_owner == 预设名输入 or focus_owner == 文件夹标题:
+			focus_owner.text = _清洗文本(focus_owner.text)
+		get_tree().process_frame.connect(func():
+			var new_focus = get_viewport().gui_get_focus_owner()
+			if new_focus == null:
+				if is_instance_valid(focus_owner):
+					focus_owner.release_focus()
+		, CONNECT_ONE_SHOT)
+
+func _处理键盘输入(event: InputEventKey):
+	if _窗口快捷键控制器.处理最小化唤出快捷键(event):
+		return
+	var 焦点 = get_viewport().gui_get_focus_owner()
+	if _处理全局命令快捷键(event, 焦点):
+		return
+	if _处理控制组合快捷键(event, 焦点):
+		return
+	var 选中 = 树状菜单.get_selected()
+	if not 选中 or 正在重命名状态:
+		return
+	_处理树焦点快捷键(event, 焦点, 选中)
+
+func _处理全局命令快捷键(event: InputEventKey, 焦点: Control) -> bool:
+	# --- 强制/全局运行快捷键 ---
+	if event.ctrl_pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
+		_点击执行()
+		get_viewport().set_input_as_handled()
+		return true
+	# --- Shift + Enter 智能解析 (输入状态下也有效) ---
+	if event.shift_pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
+		_智能解析并覆盖参数(核心命令输入.text)
+		get_viewport().set_input_as_handled()
+		return true
+	# --- 核心 Ctrl + N 特权：随时新建文件夹 ---
+	if event.ctrl_pressed and event.keycode == KEY_N:
+		_右键菜单项被按下.call_deferred(1)
+		get_viewport().set_input_as_handled()
+		return true
+	# --- Ctrl + G 范围合并快捷键 (焦点到鼠标位置) ---
+	if event.ctrl_pressed and event.keycode == KEY_G:
+		_快捷范围合并()
+		get_viewport().set_input_as_handled()
+		return true
+	# --- Ctrl + Shift + C 全局复制完整命令（输入状态也生效） ---
+	if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
+		_on_copy_command_pressed()
+		get_viewport().set_input_as_handled()
+		return true
+	# --- Ctrl + C 复制快捷键 (非输入状态) ---
+	# Ctrl+C：若预览有选中文本则复制选中，否则复制完整命令
+	# Ctrl+Shift+C：见上方全局分支
+	if event.ctrl_pressed and event.keycode == KEY_C:
+		var 是否在输入 = (焦点 is LineEdit or 焦点 is TextEdit)
+		if not 是否在输入:
+			_复制预览选中或完整命令()
 			get_viewport().set_input_as_handled()
-			return
-		
-		var 焦点 = get_viewport().gui_get_focus_owner()
-		var 选中 = 树状菜单.get_selected()
-		
-		# --- 强制/全局运行快捷键 ---
-		if event.ctrl_pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
-			_点击执行(); get_viewport().set_input_as_handled(); return
-		
-		# --- Shift + Enter 智能解析 (输入状态下也有效) ---
-		if event.shift_pressed and (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
-			_智能解析并覆盖参数(核心命令输入.text); get_viewport().set_input_as_handled(); return
-		
-		# --- 核心 Ctrl + N 特权：随时新建文件夹 ---
-		if event.ctrl_pressed and event.keycode == KEY_N:
-			_右键菜单项被按下.call_deferred(1); get_viewport().set_input_as_handled(); return
-		
-		# --- Ctrl + G 范围合并快捷键 (焦点到鼠标位置) ---
-		if event.ctrl_pressed and event.keycode == KEY_G:
-			_快捷范围合并()
-			get_viewport().set_input_as_handled(); return
+			return true
+	if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+		if not (焦点 is TextEdit):
+			_点击执行()
+			get_viewport().set_input_as_handled()
+			return true
+	return false
 
-		# --- Ctrl + Shift + C 全局复制完整命令（输入状态也生效） ---
-		if event.ctrl_pressed and event.shift_pressed and event.keycode == KEY_C:
-			_on_copy_command_pressed()
-			get_viewport().set_input_as_handled(); return
-		
-		# --- Ctrl + C 复制快捷键 (非输入状态) ---
-		# Ctrl+C：若预览有选中文本则复制选中，否则复制完整命令
-		# Ctrl+Shift+C：见上方全局分支
-		if event.ctrl_pressed and event.keycode == KEY_C:
-			var 是否在输入 = (焦点 is LineEdit or 焦点 is TextEdit)
-			if not 是否在输入:
-				_复制预览选中或完整命令()
-				get_viewport().set_input_as_handled(); return
-		
-		if (event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER):
-			if !(焦点 is TextEdit):
-				_点击执行(); get_viewport().set_input_as_handled(); return
+func _处理控制组合快捷键(event: InputEventKey, 焦点: Control) -> bool:
+	if not event.ctrl_pressed:
+		return false
+	# --- 非焦点状态快捷键 (即非输入状态) ---
+	var 是否在输入 = (焦点 is LineEdit or 焦点 is TextEdit)
+	if not 是否在输入:
+		if event.keycode == KEY_A:
+			_右键菜单项被按下(0) # 新建模板
+			return true
+		if event.keycode == KEY_D:
+			_右键菜单项被按下(3) # 克隆副本
+			return true
+	# 全局生效快捷键 (Ctrl+F 搜索 / Ctrl+B 添加参数)
+	if event.keycode == KEY_F:
+		搜索框.grab_focus()
+		搜索框.select_all()
+		get_viewport().set_input_as_handled()
+		return true
+	if event.keycode == KEY_B and 预设面板.visible:
+		创建参数行("", "", "")
+		return true
+	return false
 
-		# --- 非焦点状态快捷键 (即非输入状态) ---
-		if event.ctrl_pressed:
-			var 是否在输入 = (焦点 is LineEdit or 焦点 is TextEdit)
-			if not 是否在输入:
-				if event.keycode == KEY_A: _右键菜单项被按下(0); return # 新建模板
-				if event.keycode == KEY_D: _右键菜单项被按下(3); return # 克隆副本
-			
-			# 全局生效快捷键 (Ctrl+F 搜索 / Ctrl+B 添加参数)
-			if event.keycode == KEY_F:
-				搜索框.grab_focus(); 搜索框.select_all()
-				get_viewport().set_input_as_handled(); return
-			
-			if event.keycode == KEY_B and 预设面板.visible:
-				创建参数行("", "", ""); return
-		if !选中 or 正在重命名状态: return
-		if 焦点 == 树状菜单:
-			match event.keycode:
-				KEY_F2: _触发重命名(选中)
-				KEY_DELETE: _点击删除动作()
-				KEY_ENTER: _点击执行()
-				KEY_D: if event.ctrl_pressed: _点击克隆动作()
+func _处理树焦点快捷键(event: InputEventKey, 焦点: Control, 选中: TreeItem):
+	if 焦点 != 树状菜单:
+		return
+	match event.keycode:
+		KEY_F2:
+			_触发重命名(选中)
+		KEY_DELETE:
+			_点击删除动作()
+		KEY_ENTER:
+			_点击执行()
+		KEY_D:
+			if event.ctrl_pressed:
+				_点击克隆动作()
 
 # --- 键盘流辅助逻辑 ---
 
@@ -1130,7 +731,7 @@ func _智能解析并覆盖参数(文本:String):
 func _同步状态到UI():
 	# 从配置管理器加载新 Profile 的数据到 UI
 	_加载折叠到内存()
-	_加载最小化唤出快捷键()
+	_窗口快捷键控制器.从配置加载并应用()
 	当前字体大小 = 配置管理器.全局配置.get("字体大小", 20)
 	搜文件夹备注勾选.button_pressed = 配置管理器.全局配置.get("搜文件夹备注", true)
 	搜模板备注勾选.button_pressed = 配置管理器.全局配置.get("搜模板备注", true)
