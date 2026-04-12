@@ -17,6 +17,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_rv8a1")
+"调试模式" = false
 
 [node name="底色" type="ColorRect" parent="." unique_id=1151164694]
 layout_mode = 1
@@ -332,11 +333,6 @@ layout_mode = 2
 layout_mode = 2
 tooltip_text = "在执行命令前添加 chcp 65001，解决 Windows 终端中文显示为乱码的问题"
 text = "UTF-8 模式"
-
-[node name="多开许可" type="CheckBox" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=1142249931]
-layout_mode = 2
-tooltip_text = "允许同时运行多个此应用窗口"
-text = "允许多开"
 
 [node name="执行时复制" type="CheckBox" parent="布局容器/主体区域/右侧内容栈/预设详情面板/底部动作" unique_id=339734374]
 layout_mode = 2

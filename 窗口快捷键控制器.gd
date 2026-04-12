@@ -2,13 +2,17 @@ extends RefCounted
 class_name 窗口快捷键控制器
 
 const 默认最小化唤出快捷键文本 := "Ctrl+Shift+D"
+const 菜单ID_窗口快捷键设置 := 100
+const 菜单ID_允许多开设置 := 101
 
 var _宿主: Node = null
 var _配置管理器 = null
+var _是否调试模式: bool = true
 var _注入通用样式回调: Callable
 var _切换窗口最小化唤出回调: Callable
 
-var _最小化唤出快捷键按钮: Button = null
+var _设置按钮: Button = null
+var _设置菜单: PopupMenu = null
 var _最小化唤出快捷键: InputEventKey = null
 var _快捷键设置弹窗: AcceptDialog = null
 var _快捷键采集输入框: LineEdit = null
@@ -18,22 +22,27 @@ var _全局热键管理器 = preload("res://全局热键管理器.gd").new()
 var _快捷键工具 = preload("res://快捷键工具.gd").new()
 var _已启动全局热键文本: String = ""
 
-func 初始化(宿主: Node, 工具栏: Node, 配置管理器对象, 注入通用样式回调: Callable, 切换窗口最小化唤出回调: Callable):
+func 初始化(宿主: Node, 工具栏: Node, 配置管理器对象, 是否调试模式: bool, 注入通用样式回调: Callable, 切换窗口最小化唤出回调: Callable):
 	_宿主 = 宿主
 	_配置管理器 = 配置管理器对象
+	_是否调试模式 = 是否调试模式
 	_注入通用样式回调 = 注入通用样式回调
 	_切换窗口最小化唤出回调 = 切换窗口最小化唤出回调
 	if not is_instance_valid(工具栏):
 		return
-	if is_instance_valid(_最小化唤出快捷键按钮):
+	if is_instance_valid(_设置按钮):
 		return
-	_最小化唤出快捷键按钮 = Button.new()
-	_最小化唤出快捷键按钮.name = "最小化唤出快捷键按钮"
-	_最小化唤出快捷键按钮.focus_mode = Control.FOCUS_CLICK
-	_最小化唤出快捷键按钮.tooltip_text = "设置最小化/唤出窗口快捷键"
-	_最小化唤出快捷键按钮.pressed.connect(_打开最小化快捷键设置)
-	工具栏.add_child(_最小化唤出快捷键按钮)
-	_更新最小化唤出快捷键按钮文本()
+	_设置按钮 = Button.new()
+	_设置按钮.name = "设置按钮"
+	_设置按钮.text = "⚙"
+	_设置按钮.focus_mode = Control.FOCUS_CLICK
+	_设置按钮.pressed.connect(_打开设置菜单)
+	工具栏.add_child(_设置按钮)
+	_设置菜单 = PopupMenu.new()
+	_设置菜单.name = "设置菜单"
+	_设置菜单.id_pressed.connect(_设置菜单项被点击)
+	_宿主.add_child(_设置菜单)
+	_更新设置按钮提示文本()
 
 func 从配置加载并应用():
 	if _配置管理器 == null:
@@ -45,7 +54,7 @@ func 从配置加载并应用():
 		_配置管理器.全局配置["最小化唤出快捷键"] = 默认最小化唤出快捷键文本
 		_配置管理器.保存全局配置()
 	_最小化唤出快捷键 = 解析结果
-	_更新最小化唤出快捷键按钮文本()
+	_更新设置按钮提示文本()
 	_重启全局热键助手()
 
 func 处理最小化唤出快捷键(event: InputEventKey) -> bool:
@@ -65,14 +74,46 @@ func 处理最小化唤出快捷键(event: InputEventKey) -> bool:
 func 释放资源():
 	_停止全局热键助手()
 	_关闭最小化快捷键设置弹窗()
+	if is_instance_valid(_设置菜单):
+		_设置菜单.queue_free()
+	_设置菜单 = null
+	if is_instance_valid(_设置按钮):
+		_设置按钮.queue_free()
+	_设置按钮 = null
 
-func _更新最小化唤出快捷键按钮文本():
-	if not is_instance_valid(_最小化唤出快捷键按钮):
+func _更新设置按钮提示文本():
+	if not is_instance_valid(_设置按钮):
 		return
 	var 显示文本 = _快捷键工具.快捷键对象转文本(_最小化唤出快捷键)
 	if 显示文本 == "":
 		显示文本 = 默认最小化唤出快捷键文本
-	_最小化唤出快捷键按钮.text = "窗口快捷键: " + 显示文本
+	_设置按钮.tooltip_text = "窗口快捷键: " + 显示文本
+
+func _打开设置菜单():
+	if not is_instance_valid(_设置按钮) or not is_instance_valid(_设置菜单):
+		return
+	_设置菜单.clear()
+	_设置菜单.add_item("窗口快捷键", 菜单ID_窗口快捷键设置)
+	_设置菜单.add_separator()
+	_设置菜单.add_check_item("允许多开", 菜单ID_允许多开设置)
+	var 是否允许多开 = bool(_配置管理器.全局配置.get("允许多开", false))
+	_设置菜单.set_item_checked(_设置菜单.get_item_index(菜单ID_允许多开设置), 是否允许多开)
+	if _注入通用样式回调.is_valid():
+		_注入通用样式回调.call(_设置菜单)
+	var 弹出坐标 = _设置按钮.get_global_rect().position + Vector2(0, _设置按钮.size.y)
+	_设置菜单.position = Vector2i(弹出坐标)
+	_设置菜单.popup()
+
+func _设置菜单项被点击(id: int):
+	if _配置管理器 == null:
+		return
+	match id:
+		菜单ID_窗口快捷键设置:
+			_打开最小化快捷键设置()
+		菜单ID_允许多开设置:
+			var 当前值 = bool(_配置管理器.全局配置.get("允许多开", false))
+			_配置管理器.全局配置["允许多开"] = !当前值
+			_配置管理器.保存全局配置()
 
 func _打开最小化快捷键设置():
 	if not is_instance_valid(_宿主):
@@ -136,7 +177,7 @@ func _确认最小化快捷键设置():
 	_最小化唤出快捷键 = _快捷键待应用
 	_配置管理器.全局配置["最小化唤出快捷键"] = _快捷键工具.快捷键对象转文本(_最小化唤出快捷键)
 	_配置管理器.保存全局配置()
-	_更新最小化唤出快捷键按钮文本()
+	_更新设置按钮提示文本()
 	_重启全局热键助手()
 	_关闭最小化快捷键设置弹窗()
 
@@ -159,7 +200,7 @@ func _重启全局热键助手():
 		return
 	if _全局热键管理器.助手是否在线() and _已启动全局热键文本 == 新快捷键文本:
 		return
-	var 是否成功 = _全局热键管理器.重启助手(_配置管理器.基础目录, 新快捷键文本)
+	var 是否成功 = _全局热键管理器.重启助手(_配置管理器.基础目录, 新快捷键文本, _是否调试模式)
 	if 是否成功:
 		_已启动全局热键文本 = 新快捷键文本
 		var 日志路径 = _全局热键管理器.获取日志路径()

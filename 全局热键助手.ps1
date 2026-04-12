@@ -1,4 +1,4 @@
-﻿
+﻿# ShellQuicker 全局热键助手脚本：用于让软件支持全局最小化/唤出（当前快捷键：Ctrl+Shift+D）
 param(
   [Parameter(Mandatory = $true)][int]$TargetProcessId,
   [string]$Hotkey = 'Ctrl+Shift+D',
@@ -42,6 +42,8 @@ public class HotkeyInteropWindow : Form {
   public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
   [DllImport("user32.dll")]
   public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")]
+  public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")]
   public static extern bool IsIconic(IntPtr hWnd);
   [DllImport("user32.dll")]
@@ -120,6 +122,10 @@ public class HotkeyInteropWindow : Form {
         ShowWindowAsync(hwnd, 9);
         SetForegroundWindow(hwnd);
         WriteLog("执行恢复窗口 SW_RESTORE");
+      } else if (GetForegroundWindow() != hwnd) {
+        ShowWindowAsync(hwnd, 9);
+        SetForegroundWindow(hwnd);
+        WriteLog("执行激活窗口 SET_FOREGROUND");
       } else {
         ShowWindowAsync(hwnd, 6);
         WriteLog("执行最小化窗口 SW_MINIMIZE");

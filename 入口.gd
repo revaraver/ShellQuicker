@@ -2,6 +2,7 @@ extends Node
 
 # 入口脚本 Pro++ (大师极简交互版 - 终极流畅版)
 # 支持键盘流搜素、自适应备注、单实例锁定、混合导航、配置持久化
+@export var 调试模式: bool = true
 
 @onready var 树状菜单: Tree = $布局容器 / 主体区域 / 左侧树容器 / 左侧布局 / 树状菜单
 @onready var 右键菜单: PopupMenu = $右键菜单
@@ -34,7 +35,6 @@ var 搜夹连带子项勾选: CheckBox
 @onready var 快捷新建文件夹 = $布局容器 / 主体区域 / 左侧树容器 / 左侧布局 / 树快捷操作 / 快捷新建文件夹
 @onready var Shell选择 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / Shell选择
 @onready var UTF8模式 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / UTF8模式
-@onready var 多开开关 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / 多开许可
 @onready var 执行时复制开关 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 底部动作 / 执行时复制
 @onready var 执行目录预览 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 执行目录行 / 执行目录预览
 @onready var 预览标签 = $布局容器 / 主体区域 / 右侧内容栈 / 预设详情面板 / 预览面板 / M / 预览布局 / 命令预览行 / 详情预览
@@ -135,7 +135,6 @@ func _ready():
 	智能解析按钮.pressed.connect(func(): _智能解析并覆盖参数(核心命令输入.text))
 	Shell选择.item_selected.connect(_命令执行管理器.执行器设置已变更)
 	UTF8模式.toggled.connect(_命令执行管理器.执行器设置已变更)
-	多开开关.toggled.connect(_on_allow_multiple_toggled)
 	执行时复制开关.toggled.connect(_on_copy_on_execute_toggled)
 	复制指令按钮.pressed.connect(_命令执行管理器.复制完整命令)
 
@@ -242,7 +241,6 @@ func _初始化命令执行管理器():
 		预览标签,
 		Shell选择,
 		UTF8模式,
-		执行时复制开关,
 		Callable(self, "_获取当前选中ID"),
 		Callable(self, "_计划保存当前预设"),
 		Callable(self, "_自动保存当前预设"),
@@ -329,6 +327,7 @@ func _初始化窗口快捷键控制器():
 		self,
 		工具栏,
 		配置管理器,
+		调试模式,
 		Callable(self, "_注入通用样式"),
 		Callable(self, "_切换窗口最小化唤出")
 	)
@@ -827,16 +826,12 @@ func _on_search_config_toggled(pressed: bool, kind: String):
 	配置管理器.保存全局配置()
 	_搜索框内容改变(搜索框.text)
 
-func _on_allow_multiple_toggled(pressed: bool):
-	配置管理器.全局配置["允许多开"] = pressed
+func _on_layout_dragged(offset):
+	配置管理器.全局配置["split_offset"] = offset
 	配置管理器.保存全局配置()
 
 func _on_copy_on_execute_toggled(pressed: bool):
 	配置管理器.全局配置["执行时复制"] = pressed
-	配置管理器.保存全局配置()
-
-func _on_layout_dragged(offset):
-	配置管理器.全局配置["split_offset"] = offset
 	配置管理器.保存全局配置()
 
 func _on_panel_gui_input(e, p):
