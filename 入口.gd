@@ -75,6 +75,7 @@ func _ready():
 	if img_tex: DisplayServer.set_icon(img_tex.get_image())
 
 	_加载内置图标()
+	_初始化搜索穿透勾选框()
 	_初始化树渲染搜索管理器()
 	_初始化命令执行管理器()
 	_初始化参数编辑管理器()
@@ -152,6 +153,24 @@ func _ready():
 	for p in [预设面板, 文件夹面板]:
 		p.mouse_filter = Control.MOUSE_FILTER_PASS
 		p.gui_input.connect(_on_panel_gui_input.bind(p))
+
+func _初始化搜索穿透勾选框():
+	if is_instance_valid(搜夹连带子项勾选):
+		return
+	var 左侧布局 = $布局容器 / 主体区域 / 左侧树容器 / 左侧布局
+	if not is_instance_valid(左侧布局):
+		return
+	搜夹连带子项勾选 = CheckBox.new()
+	搜夹连带子项勾选.name = "搜夹连带子项"
+	搜夹连带子项勾选.focus_mode = Control.FOCUS_CLICK
+	搜夹连带子项勾选.text = "文件夹穿透"
+	搜夹连带子项勾选.tooltip_text = "命中文件夹时连带显示其子项"
+	搜夹连带子项勾选.visible = false
+	搜夹连带子项勾选.disabled = true
+	左侧布局.add_child(搜夹连带子项勾选)
+	var 树快捷操作 = $布局容器 / 主体区域 / 左侧树容器 / 左侧布局 / 树快捷操作
+	if is_instance_valid(树快捷操作):
+		左侧布局.move_child(搜夹连带子项勾选, 树快捷操作.get_index())
 
 func _完整状态恢复流程():
 	# 1. 物理同步 UI 组件值
@@ -824,6 +843,7 @@ func _on_tree_mouse_selected(_pos: Vector2, _btn_idx: int):
 func _on_search_config_toggled(pressed: bool, kind: String):
 	配置管理器.全局配置[kind] = pressed
 	配置管理器.保存全局配置()
+	刷新树状菜单(false)
 	_搜索框内容改变(搜索框.text)
 
 func _on_layout_dragged(offset):
