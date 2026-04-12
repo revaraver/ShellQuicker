@@ -513,7 +513,40 @@ func _处理点击空白区域失去焦点(event: InputEvent):
 			if new_focus == null:
 				if is_instance_valid(focus_owner):
 					focus_owner.release_focus()
+				_清理命令预览选中并释放焦点()
 		, CONNECT_ONE_SHOT)
+
+func _清理命令预览选中并释放焦点():
+	if is_instance_valid(执行目录预览):
+		执行目录预览.deselect()
+	if is_instance_valid(预览标签):
+		预览标签.deselect()
+	var 焦点控件 = get_viewport().gui_get_focus_owner()
+	if is_instance_valid(焦点控件):
+		焦点控件.release_focus()
+
+func _是否模板页空白点击(点击控件: Control, 面板: Control) -> bool:
+	if !is_instance_valid(面板):
+		return false
+	if !is_instance_valid(点击控件):
+		return true
+	if 点击控件 == 面板:
+		return true
+	if not 面板.is_ancestor_of(点击控件):
+		return false
+	if 点击控件 is Label:
+		return true
+	if 点击控件 is PanelContainer:
+		return true
+	if 点击控件 is MarginContainer:
+		return true
+	if 点击控件 is VBoxContainer:
+		return true
+	if 点击控件 is HBoxContainer:
+		return true
+	if 点击控件.focus_mode == Control.FOCUS_NONE and 点击控件.mouse_filter != Control.MOUSE_FILTER_STOP:
+		return true
+	return false
 
 func _处理键盘输入(event: InputEventKey):
 	if _窗口快捷键控制器.处理最小化唤出快捷键(event):
@@ -859,9 +892,10 @@ func _on_copy_on_execute_toggled(pressed: bool):
 
 func _on_panel_gui_input(e, p):
 	if !is_instance_valid(p): return
-	if e is InputEventMouseButton and e.pressed:
-		var node_focus = get_viewport().gui_get_focus_owner()
-		if is_instance_valid(node_focus): node_focus.release_focus()
+	if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+		var 点击控件 = get_viewport().gui_get_hovered_control()
+		if _是否模板页空白点击(点击控件, p):
+			_清理命令预览选中并释放焦点()
 
 func _树上运行图标被点击(项:TreeItem, _c, _i, _idx):
 	_命令执行管理器.树上运行图标被点击(项)
