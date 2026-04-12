@@ -4,6 +4,7 @@ extends Node
 # 支持键盘流搜素、自适应备注、单实例锁定、混合导航、配置持久化
 @export var 调试模式: bool = true
 
+@onready var 主布局容器: Control = $布局容器
 @onready var 树状菜单: Tree = $布局容器 / 主体区域 / 左侧树容器 / 左侧布局 / 树状菜单
 @onready var 右键菜单: PopupMenu = $右键菜单
 @onready var 搜索框: LineEdit = $布局容器 / 顶部导航 / MarginContainer / 工具栏 / 搜索框区域 / 搜索框
@@ -369,6 +370,9 @@ func _调整字体大小(增量:int):
 	配置管理器.全局配置["字体大小"] = 当前字体大小; 配置管理器.保存全局配置(); _注入通用样式(self )
 
 func _注入通用样式(节点:Node):
+	if 节点 == 主布局容器:
+		_应用提示字体主题(主布局容器)
+
 	if 节点 is LineEdit or 节点 is Button or 节点 is Label or 节点 is Tree or 节点 is CheckBox or 节点 is TextEdit or 节点 is PopupMenu or 节点 is RichTextLabel:
 		if 节点 is RichTextLabel:
 			节点.add_theme_font_size_override("normal_font_size", 当前字体大小)
@@ -410,6 +414,14 @@ func _注入通用样式(节点:Node):
 		if popup: _注入通用样式(popup)
 
 	for 子 in 节点.get_children(): _注入通用样式(子)
+
+func _应用提示字体主题(控件: Control):
+	if not is_instance_valid(控件):
+		return
+	var 提示字体大小 = maxi(10, 当前字体大小 - 2)
+	var 自定义主题 = 控件.theme if 控件.theme else Theme.new()
+	自定义主题.set_font_size("font_size", "TooltipLabel", 提示字体大小)
+	控件.theme = 自定义主题
 
 func _TextEdit组件输入(event: InputEvent, 节点:TextEdit):
 	if event is InputEventKey and event.pressed:

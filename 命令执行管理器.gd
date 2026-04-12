@@ -106,8 +106,9 @@ func 执行器设置已变更(_值 = 0):
 	更新预览()
 
 func 复制完整命令():
-	# 从富文本中提取纯文本
-	DisplayServer.clipboard_set(_预览标签.get_parsed_text())
+	DisplayServer.clipboard_set(_获取预览纯命令文本())
+	_执行目录预览.deselect()
+	_预览标签.deselect()
 	_预览标签.select_all()
 
 func 复制预览选中或完整命令():
@@ -127,6 +128,27 @@ func 复制预览选中或完整命令():
 		DisplayServer.clipboard_set(命令选中)
 	else:
 		复制完整命令()
+
+func _获取预览纯命令文本() -> String:
+	var prefix_cmd = _前缀命令输入.text
+	var base_cmd = _核心命令输入.text
+	var 预览核心命令 = base_cmd
+	var 显示执行目录 = _规范化工作目录(_启动目录输入.text)
+	if is_instance_valid(_Shell选择):
+		var 是PowerShell预览 = (_Shell选择.selected == 1 or _Shell选择.selected == 3)
+		if 是PowerShell预览:
+			预览核心命令 = _补全PowerShell当前目录可执行(base_cmd, 显示执行目录)
+	var 完整文本 = ""
+	if prefix_cmd != "":
+		完整文本 += prefix_cmd
+	完整文本 += 预览核心命令
+	for 行 in _参数容器.get_children():
+		if 行.is_queued_for_deletion():
+			continue
+		var 值 = 行.get_node("Value").text.strip_edges()
+		var 显示文本 = 值 if 值 != "" else "[" + 行.get_node("Key").text + "]"
+		完整文本 += " " + 显示文本
+	return 完整文本
 
 func 点击执行():
 	if not _获取当前选中ID回调.is_valid():
