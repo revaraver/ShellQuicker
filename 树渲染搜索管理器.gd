@@ -141,14 +141,16 @@ func _递归记录折叠状态(项: TreeItem):
 func _搜索递归增强(项: TreeItem, 文本: String, 祖先强行显示: bool = false) -> bool:
 	var id = 项.get_metadata(0)
 	var 数据 = _配置管理器.树状数据.get(id)
+	var 是否搜文件夹备注 = bool(_配置管理器.全局配置.get("搜文件夹备注", true))
+	var 是否搜模板备注 = bool(_配置管理器.全局配置.get("搜模板备注", true))
 	var 匹配名称 = 文本 in 项.get_text(0).to_lower()
 	var 匹配备注 = false
 	if 数据:
-		if 数据["类型"] == "文件夹" and is_instance_valid(_搜文件夹备注勾选) and _搜文件夹备注勾选.button_pressed:
+		if 数据["类型"] == "文件夹" and 是否搜文件夹备注:
 			var 备注1 = 数据.get("描述", "").to_lower()
 			if 文本 in 备注1:
 				匹配备注 = true
-		elif 数据["类型"] == "预设" and is_instance_valid(_搜模板备注勾选) and _搜模板备注勾选.button_pressed:
+		elif 数据["类型"] == "预设" and 是否搜模板备注:
 			var 备注2 = 数据.get("描述", "").to_lower()
 			if 文本 in 备注2:
 				匹配备注 = true

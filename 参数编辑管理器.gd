@@ -165,6 +165,8 @@ func 弹出参数右键菜单(目标行: HBoxContainer):
 	menu.add_item("将所有参数合并入核心命令 (Merge All to Core)", 103)
 	menu.add_separator()
 	menu.add_item("在此处下方添加变量 (Ctrl+B)", 101)
+	if _注入通用样式回调.is_valid():
+		_注入通用样式回调.call(menu)
 	var 焦点 = _宿主.get_viewport().gui_get_focus_owner()
 	menu.id_pressed.connect(func(id):
 		match id:

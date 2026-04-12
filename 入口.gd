@@ -386,6 +386,9 @@ func _注入通用样式(节点:Node):
 			box.border_color = Color(0.25, 0.28, 0.32); box.corner_radius_top_left = 4; box.corner_radius_top_right = 4; box.corner_radius_bottom_left = 4; box.corner_radius_bottom_right = 4
 			box.content_margin_top = 8; box.content_margin_bottom = 8; box.content_margin_left = 10; box.content_margin_right = 10
 			节点.add_theme_stylebox_override("normal", box)
+			var 系统右键菜单 = 节点.get_menu()
+			if is_instance_valid(系统右键菜单):
+				_注入通用样式(系统右键菜单)
 			
 			# 为多行输入框特殊处理 Tab 键切换焦点
 			if 节点 is TextEdit:
